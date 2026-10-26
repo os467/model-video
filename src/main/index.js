@@ -3,6 +3,7 @@ import {
   clamp,
   locate
 } from '../beat/timeline.js';
+import { smoothstep } from '../kit/rng.js';
 import { Clock } from '../kit/clock.js';
 import { SCENES } from '../scenes/index.js';
 import { drawBlock } from './draw-block.js';
@@ -24,6 +25,8 @@ if (!p5) throw new Error('p5 未加载：请通过 tools/serve.mjs 打开预览�
 new p5((p) => {
   let clock;
   let snapshots;
+  let transA = null;
+  let transB = null;
   let ui = null;
   let lastHud = '';
 
@@ -33,6 +36,12 @@ new p5((p) => {
     canvas.parent('canvas-host');
     p.pixelDensity(1);
     p.frameRate(60);
+
+    // 封面→第 1 版的横向平移用两张离屏画布，避免逐帧分配。
+    transA = p.createGraphics(W, H);
+    transA.pixelDensity(1);
+    transB = p.createGraphics(W, H);
+    transB.pixelDensity(1);
 
     document.body.classList.toggle('render', RENDER);
 
@@ -83,6 +92,12 @@ new p5((p) => {
   };
 
   function renderFrame(g, t, loc) {
+    // 封面在第 1 版强拍上向右平移，而不是硬切/闪白。
+    if (t >= 5.0 && t < 5.72) {
+      drawIntroToBlock(g, t);
+      return;
+    }
+
     g.background(0);
     if (loc.part === 'intro') {
       drawIntro(g, t);
@@ -90,6 +105,30 @@ new p5((p) => {
       drawBlock(g, t, loc, W, H);
     } else {
       drawOutro(g, t, snapshots);
+    }
+  }
+
+  function drawIntroToBlock(g, t) {
+    const k = smoothstep(5.0, 5.72, t);
+    drawIntro(transA, 5.0);
+    drawBlock(transB, t, locate(t), W, H);
+
+    g.background(0);
+    g.image(transA, -W * k, 0);
+    g.image(transB, W * (1 - k), 0);
+
+    // 两页纸之间的接缝用一层暖纸色渐变压住，避免亮白竖条。
+    const seam = W * (1 - k);
+    if (seam > 1 && seam < W - 1) {
+      const ctx = g.drawingContext;
+      ctx.save();
+      const grad = ctx.createLinearGradient(seam - 130, 0, seam + 130, 0);
+      grad.addColorStop(0, 'rgba(239,229,210,0)');
+      grad.addColorStop(0.5, 'rgba(231,216,188,0.34)');
+      grad.addColorStop(1, 'rgba(227,210,176,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(seam - 130, 0, 260, H);
+      ctx.restore();
     }
   }
 

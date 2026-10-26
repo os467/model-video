@@ -152,105 +152,150 @@ function drawPlate(p, paper, t) {
   p.pop();
 }
 
+// 图版上的椭圆弧：不用 p5.arc，避免椭圆长短轴被拉成圆。
+function sketchArc(p, rx, ry, rot, a0, span, color, alpha, weight, reveal) {
+  if (alpha * reveal <= 0.002) return;
+  p.push();
+  p.noFill();
+  strokeHex(p, color, alpha * reveal);
+  p.strokeWeight(weight);
+  p.beginShape();
+  const n = 40;
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + span * reveal * (i / n);
+    const x = Math.cos(a) * rx;
+    const y = Math.sin(a) * ry;
+    p.vertex(
+      x * Math.cos(rot) - y * Math.sin(rot),
+      x * Math.sin(rot) + y * Math.cos(rot)
+    );
+  }
+  p.endShape();
+  p.pop();
+}
+
 function drawSigilSketch(p, paper, t) {
-  const reveal = smoothstep(0.15, 1.6, t);
+  const reveal = smoothstep(0.15, 1.7, t);
   if (reveal <= 0.002) return;
   const cx = FRAME.x + FRAME.w / 2;
   const cy = FRAME.y + FRAME.h * 0.56;
 
   p.push();
   p.translate(cx, cy);
-  p.scale(1.55);
+  p.scale(1.5);
   p.noFill();
   p.strokeCap(p.ROUND);
 
-  // 外圈三段开口弧：深浅不同，像旧图版上的多重描线。
-  const arcs = [
-    [104, 72, -0.18, -2.7, 4.4, 0.34, 1.25],
-    [76, 52, 0.44, 0.5, 4.0, 0.28, 1.0],
-    [50, 35, -0.36, 2.2, 3.2, 0.22, 0.85]
-  ];
-  for (const [rx, ry, rot, a0, span, alpha, weight] of arcs) {
-    p.push();
-    p.rotate(rot);
-    strokeHex(p, paper.ink, alpha * reveal);
-    p.strokeWeight(weight);
-    p.arc(0, 0, rx * 2, ry * 2, a0, a0 + span * reveal, p.OPEN);
-    p.pop();
+  // 三条轨道：两条实线、一条点线，均不闭合。
+  sketchArc(p, 118, 74, -0.26, -2.55, 5.15, paper.ink, 0.22, 1.15, reveal);
+  sketchArc(p, 118, 74, -0.26, -2.55, 5.15, paper.accent, 0.05, 3.0, reveal);
+  sketchArc(p, 88, 56, 0.48, 0.35, 4.5, paper.ink, 0.17, 0.9, reveal);
+
+  // 点线轨道 + 几颗“被观测到的节点”。
+  p.noStroke();
+  for (let i = 0; i < 32; i += 2) {
+    const a = (i / 32) * Math.PI * 2;
+    const x = Math.cos(a) * 136;
+    const y = Math.sin(a) * 84;
+    const rot = 0.08;
+    const px = x * Math.cos(rot) - y * Math.sin(rot);
+    const py = x * Math.sin(rot) + y * Math.cos(rot);
+    fillHex(p, paper.ink, 0.16 * reveal);
+    p.ellipse(px, py, 1.5, 1.5);
+  }
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + 0.28;
+    const x = Math.cos(a) * 118;
+    const y = Math.sin(a) * 74;
+    const rot = -0.26;
+    const px = x * Math.cos(rot) - y * Math.sin(rot);
+    const py = x * Math.sin(rot) + y * Math.cos(rot);
+    fillHex(p, i % 4 === 0 ? paper.accent : paper.ink, 0.24 * reveal);
+    p.ellipse(px, py, 2.4, 2.4);
   }
 
-  // 十字轴线与刻度。
-  strokeHex(p, paper.ink, 0.2 * reveal);
+  // 十字轴线与刻度，让它继续像一页旧图版。
+  strokeHex(p, paper.ink, 0.16 * reveal);
   p.strokeWeight(0.8);
-  p.line(0, -84, 0, 84);
-  p.line(-112, 84, 112, 84);
-  for (let i = -3; i <= 3; i++) {
-    const y = i * 24;
+  p.line(0, -98, 0, 98);
+  p.line(-126, 4, 126, 4);
+  for (let i = -4; i <= 4; i++) {
+    const y = 4 + i * 22;
     p.line(-4, y, 4, y);
   }
-  for (let i = -3; i <= 3; i++) {
+  for (let i = -4; i <= 4; i++) {
     const x = i * 30;
-    p.line(x, 80, x, 88);
+    p.line(x, 90, x, 98);
   }
 
-  // 中心火种的外形：闭合泪滴，逐段描出。
-  const flame = [
-    [0, -64],
-    [10, -48],
-    [22, -24],
-    [26, 4],
-    [20, 30],
-    [10, 48],
-    [0, 58],
-    [-10, 48],
-    [-20, 30],
-    [-26, 4],
-    [-22, -24],
-    [-10, -48],
-    [0, -64]
-  ];
-  const n = Math.max(2, Math.floor(flame.length * reveal));
-  strokeHex(p, paper.ink, 0.5 * reveal);
-  p.strokeWeight(1.4);
-  p.beginShape();
-  for (let i = 0; i < n; i++) p.vertex(flame[i][0], flame[i][1]);
-  if (reveal > 0.985) p.endShape(p.CLOSE);
-  else p.endShape();
+  // 火苗外廓：两条从尖端向下的曲线，底端收拢。
+  p.noFill();
+  const sideN = Math.max(2, Math.floor(34 * reveal));
+  for (const side of [-1, 1]) {
+    strokeHex(p, paper.ink, 0.46 * reveal);
+    p.strokeWeight(1.3);
+    p.beginShape();
+    for (let i = 0; i < sideN; i++) {
+      const q = i / 34;
+      const y = -72 + 130 * q;
+      const w = 48 * Math.pow(Math.sin(Math.PI * q), 0.78) * (0.72 + 0.28 * q);
+      p.vertex(side * w, y);
+    }
+    p.endShape();
+  }
 
-  // 内层火苗线。
-  strokeHex(p, paper.accent, 0.32 * reveal);
-  p.strokeWeight(1.5);
-  p.beginShape();
-  p.vertex(0, -32);
-  p.vertex(9, -6);
-  p.vertex(7, 22);
-  p.vertex(0, 36);
-  p.vertex(-7, 22);
-  p.vertex(-9, -6);
-  p.endShape();
+  // 眼睛：上下眼睑 + 虹膜 + 火种瞳。
+  const lidN = Math.max(2, Math.floor(30 * reveal));
+  for (const [sign, h] of [[-1, 27], [1, 17]]) {
+    strokeHex(p, paper.ink, 0.52 * reveal);
+    p.strokeWeight(1.5);
+    p.beginShape();
+    for (let i = 0; i < lidN; i++) {
+      const u = i / 30;
+      const x = -40 + 80 * u;
+      const y = 4 + sign * h * Math.sin(Math.PI * u);
+      p.vertex(x, y);
+    }
+    p.endShape();
+  }
 
-  // 一圈虚线轨道：表示“被观察、被反复描摹”。
-  p.push();
-  const ctx = p.drawingContext;
-  ctx.save();
-  ctx.setLineDash([2.2, 4.2]);
-  strokeHex(p, paper.ink, 0.24 * reveal);
+  if (reveal > 0.48) {
+    p.noFill();
+    strokeHex(p, paper.accent, 0.28 * reveal);
+    p.strokeWeight(1.1);
+    p.ellipse(0, 4, 31, 31);
+    strokeHex(p, paper.ink, 0.2 * reveal);
+    p.strokeWeight(0.8);
+    p.ellipse(0, 4, 39, 39);
+  }
+
+  // 眉上的三根细线，像旧图版给“灵”加的方向标。
+  strokeHex(p, paper.ink, 0.2 * reveal);
   p.strokeWeight(0.9);
-  p.ellipse(0, 6, 146, 98);
-  ctx.restore();
-  p.pop();
+  for (const x of [-20, 0, 20]) {
+    p.line(x, -27, x * 1.08, -35);
+  }
 
-  // 一点点还没烧起来的暖色：图上的火种芯。
-  const ember = smoothstep(1.1, 1.8, t);
+  // 瞳心的暖色：整张图里唯一会让纸烧起来的地方。
+  const ember = smoothstep(1.0, 1.75, t);
   if (ember > 0.002) {
     p.noStroke();
-    fillHex(p, paper.accent, 0.18 * ember);
-    p.ellipse(0, 8, 30, 34);
-    fillHex(p, paper.accent, 0.55 * ember);
-    p.ellipse(-0.5, 7, 8, 12);
-    fillHex(p, '#d9a15e', 0.75 * ember);
-    p.ellipse(-1, 5, 3.4, 5);
+    fillHex(p, paper.accent, 0.13 * ember);
+    p.ellipse(0, 4, 48, 36);
+    fillHex(p, paper.accent, 0.62 * ember);
+    p.ellipse(0, 4, 13, 13);
+    fillHex(p, '#d49a58', 0.82 * ember);
+    p.ellipse(-1, 3, 7.5, 7.5);
+    fillHex(p, '#f3d6a2', 0.9 * ember);
+    p.ellipse(-2, 1.5, 3.2, 3.2);
   }
+
+  // 眼下一条很轻的测量括号。
+  strokeHex(p, paper.ink, 0.14 * reveal);
+  p.strokeWeight(0.8);
+  p.line(-40, 50, 40, 50);
+  p.line(-40, 46, -40, 54);
+  p.line(40, 46, 40, 54);
 
   p.pop();
 }
