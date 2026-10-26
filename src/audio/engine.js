@@ -1352,15 +1352,22 @@ export function createAudioEngine() {
   };
 }
 
-export async function renderAudioOffline(sampleRate = 44100) {
+export async function renderAudioOffline(sampleRate = 44100, options = {}) {
   const score = buildScore();
-  const total = Math.ceil(score.duration * sampleRate);
+  const start = clamp(Number(options.start) || 0, 0, score.duration);
+  const requested =
+    options.duration == null ? score.duration - start : Number(options.duration);
+  const duration = clamp(requested || 0, 0.01, score.duration - start);
+  const total = Math.ceil(duration * sampleRate);
   const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
   if (!Ctx) throw new Error('当前浏览器不支持 OfflineAudioContext');
   const ctx = new Ctx(2, total, sampleRate);
   const synth = new Synth(ctx);
-  synth.scheduleClimax(0, 0);
-  for (const event of score.events) synth.play(event, Math.max(0, event.t));
+  synth.scheduleClimax(start, 0);
+  for (const event of score.events) {
+    if (event.t < start || event.t >= start + duration) continue;
+    synth.play(event, Math.max(0, event.t - start));
+  }
   return ctx.startRendering();
 }
 

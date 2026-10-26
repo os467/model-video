@@ -10,8 +10,8 @@
 
 - Node 22.20.0 便携版：`E:\tools\node\node.exe`（npm 缓存指向 `E:\tools\npm-cache`）
 - Chrome：`C:\Program Files\Google\Chrome\Application\chrome.exe`
-- ffmpeg：`C:\Windows\system32\ffmpeg.exe`（阶段 1 用 `libopenh264`，该构建没有 libx264）
-- 依赖：p5 2.3.4、puppeteer-core 25.16.0
+- ffmpeg：`ffmpeg-static` 5.3.0（内置 FFmpeg 6.1.1，含 libx264）；系统 ffmpeg 仅作备用
+- 依赖：p5 2.3.4、puppeteer-core 25.16.0、ffmpeg-static 5.3.0
 
 ## 预览
 

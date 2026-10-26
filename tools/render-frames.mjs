@@ -6,15 +6,21 @@ const args = parseArgs(process.argv.slice(2));
 const start = Number(args.start ?? 0);
 const end = Number(args.end ?? 30);
 const fps = Number(args.fps ?? 30);
+const width = Number(args.width ?? 1920);
+const height = Number(args.height ?? 1080);
 const outDir = path.resolve(args.out ?? 'out/frames/sample');
 
 if (!(end > start)) throw new Error('--end 必须大于 --start');
 if (!(fps > 0)) throw new Error('--fps 必须大于 0');
+if (!(width > 0) || !(height > 0)) throw new Error('--width/--height 必须大于 0');
+if (width % 2 || height % 2) throw new Error('4:2:0 输出要求宽高为偶数');
 
 const total = Math.round((end - start) * fps);
 await fs.mkdir(outDir, { recursive: true });
 
-console.log(`逐帧导出：${total} 帧 @ ${fps}fps，${start}s–${end}s`);
+console.log(
+  `逐帧导出：${total} 帧 @ ${fps}fps，${start}s–${end}s，${width}×${height}`
+);
 console.log(`输出：${outDir}`);
 
 const started = Date.now();
@@ -30,7 +36,7 @@ await withRenderPage(async (page) => {
     await page.screenshot({
       path: file,
       type: 'png',
-      clip: { x: 0, y: 0, width: 1920, height: 1080 },
+      clip: { x: 0, y: 0, width, height },
       captureBeyondViewport: false
     });
 
@@ -44,7 +50,7 @@ await withRenderPage(async (page) => {
       );
     }
   }
-});
+}, { width, height });
 
 const elapsed = (Date.now() - started) / 1000;
 console.log(`完成：${total} 帧，用时 ${elapsed.toFixed(1)}s`);

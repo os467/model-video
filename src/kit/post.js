@@ -2,12 +2,12 @@ import { clamp } from './rng.js';
 
 // 全片共用的电影后处理：高光 bloom、5% 边缘衰减、胶片颗粒。
 // 全部由时间 t 决定，逐帧结果可复现；不使用 Math.random。
-const BLOOM_W = 384;
-const BLOOM_H = 216;
-const BLUR_W = 192;
-const BLUR_H = 108;
-const GRAIN_W = 640;
-const GRAIN_H = 360;
+const BASE_BLOOM_W = 384;
+const BASE_BLOOM_H = 216;
+const BASE_BLUR_W = 192;
+const BASE_BLUR_H = 108;
+const BASE_GRAIN_W = 640;
+const BASE_GRAIN_H = 360;
 
 let state = null;
 
@@ -22,15 +22,30 @@ function makeCanvas(w, h, willRead = false) {
   return { canvas, ctx };
 }
 
-function ensureState() {
-  if (state) return state;
+function ensureState(W, H) {
+  if (state && state.width === W && state.height === H) return state;
 
-  const bloom = makeCanvas(BLOOM_W, BLOOM_H, true);
-  const blur = makeCanvas(BLUR_W, BLUR_H);
-  const grain = makeCanvas(GRAIN_W, GRAIN_H);
-  const grainData = grain.ctx.createImageData(GRAIN_W, GRAIN_H);
+  // 后处理缓冲随笔面分辨率一起放大；4K 下颗粒仍是细颗粒，不会被拉成大块。
+  const scale = clamp(W / 1920, 1, 2);
+  const bloomW = Math.round(BASE_BLOOM_W * scale);
+  const bloomH = Math.round(BASE_BLOOM_H * scale);
+  const blurW = Math.round(BASE_BLUR_W * scale);
+  const blurH = Math.round(BASE_BLUR_H * scale);
+  const grainW = Math.round(BASE_GRAIN_W * scale);
+  const grainH = Math.round(BASE_GRAIN_H * scale);
+
+  const bloom = makeCanvas(bloomW, bloomH, true);
+  const blur = makeCanvas(blurW, blurH);
+  const grain = makeCanvas(grainW, grainH);
+  const grainData = grain.ctx.createImageData(grainW, grainH);
 
   state = {
+    width: W,
+    height: H,
+    bloomW,
+    bloomH,
+    blurW,
+    blurH,
     bloomCanvas: bloom.canvas,
     bloomCtx: bloom.ctx,
     blurCanvas: blur.canvas,
@@ -58,21 +73,21 @@ function bloomSettings(loc) {
 
 function drawBloom(p, t, loc, W, H) {
   const { threshold, strength } = bloomSettings(loc);
-  const st = ensureState();
+  const st = ensureState(W, H);
   const source = p.drawingContext.canvas;
-  const frame = Math.floor(t * 30);
+  const frame = Math.floor(t * (window.__renderMode ? 240 : 30));
   const key = `${loc.part}:${loc.blockIndex}:${threshold}:${strength}`;
 
-  // 实时 60fps 时 bloom 每 30Hz 更新一次；离线 30fps 时每帧都更新。
+  // 实时预览 30Hz 更新 bloom；离线渲染每帧更新，保证 60fps 样片无阶梯。
   if (frame !== st.bloomFrame || key !== st.bloomKey) {
-    // 降到 384×216 做亮部提取，再经 192×108 二次降采样形成柔和扩散。
+    // 降到低分辨率做亮部提取，再二次降采样形成柔和扩散。
     // 比全屏 canvas blur 便宜得多，且不会把整张纸面一起糊掉。
     st.bloomCtx.globalCompositeOperation = 'copy';
     st.bloomCtx.imageSmoothingEnabled = true;
-    st.bloomCtx.drawImage(source, 0, 0, BLOOM_W, BLOOM_H);
+    st.bloomCtx.drawImage(source, 0, 0, st.bloomW, st.bloomH);
     st.bloomCtx.globalCompositeOperation = 'source-over';
 
-    const image = st.bloomCtx.getImageData(0, 0, BLOOM_W, BLOOM_H);
+    const image = st.bloomCtx.getImageData(0, 0, st.bloomW, st.bloomH);
     const data = image.data;
     const cut = threshold * 255;
     const span = Math.max(1, 255 - cut);
@@ -93,7 +108,7 @@ function drawBloom(p, t, loc, W, H) {
 
     st.blurCtx.globalCompositeOperation = 'copy';
     st.blurCtx.imageSmoothingEnabled = true;
-    st.blurCtx.drawImage(st.bloomCanvas, 0, 0, BLUR_W, BLUR_H);
+    st.blurCtx.drawImage(st.bloomCanvas, 0, 0, st.blurW, st.blurH);
     st.bloomFrame = frame;
     st.bloomKey = key;
   }
@@ -150,7 +165,7 @@ function drawEdgeFalloff(p, loc, W, H) {
 
 function drawGrain(p, t, W, H, strength) {
   if (strength <= 0.001) return;
-  const st = ensureState();
+  const st = ensureState(W, H);
   const data = st.grainData.data;
   let seed = (Math.floor(t * 60) * 1664525 + 1013904223) >>> 0;
 

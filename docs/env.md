@@ -5,7 +5,8 @@
 - Node：便携版 22.20.0，位于 `E:\tools\node\node.exe`（不占 C 盘，npm 10.9.3）
 - npm cache：`E:\tools\npm-cache`（见项目 `.npmrc`）
 - Chrome：`C:\Program Files\Google\Chrome\Application\chrome.exe`（155.0.8059.85，Puppeteer 用 puppeteer-core 调用）
-- ffmpeg：`C:\Windows\system32\ffmpeg.exe`（5.0.1）；该构建**没有 libx264**，阶段 1 用 `libopenh264` 软件编码
+- ffmpeg：项目依赖 `ffmpeg-static`（5.3.0，内置 FFmpeg 6.1.1，含 `libx264`）；系统 `C:\Windows\system32\ffmpeg.exe`（5.0.1）没有 libx264，只作备用
+- 编码：`libx264` High Profile / CRF 18 / `yuv420p`；4K60 样片由 `npm run render:sample4k` + `npm run encode:sample4k` 生成
 
 ## 依赖与协议
 

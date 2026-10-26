@@ -6,6 +6,8 @@ import { CHROME_PATH, parseArgs } from './harness.mjs';
 
 const args = parseArgs(process.argv.slice(2));
 const out = path.resolve(args.out ?? 'out/audio/score.wav');
+const start = Number(args.start ?? 0);
+const duration = args.duration == null ? null : Number(args.duration);
 await fs.mkdir(path.dirname(out), { recursive: true });
 await fs.writeFile(out, Buffer.alloc(0));
 
@@ -44,8 +46,15 @@ try {
   });
   await page.waitForFunction('window.__ready === true', { timeout: 120000 });
 
-  console.log('离线渲染 137s 音频…');
-  const info = await page.evaluate(() => window.__renderAudio());
+  console.log(
+    duration == null
+      ? `离线渲染 ${start ? `${start}s 起` : '全片'}音频…`
+      : `离线渲染 ${start}s–${start + duration}s 音频…`
+  );
+  const info = await page.evaluate(
+    (options) => window.__renderAudio(options),
+    { start, duration }
+  );
   if (errors.length) throw new Error(errors.join('\n'));
   if (!info || !info.bytes) throw new Error('音频渲染没有返回数据');
   if (bytes !== info.bytes) {

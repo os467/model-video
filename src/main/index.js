@@ -13,15 +13,17 @@ import { drawIntro } from './intro.js';
 import { drawOutro } from './outro.js';
 import { makeSnapshots } from './snapshots.js';
 
-const W = 1920;
-const H = 1080;
-
 const params = new URLSearchParams(window.location.search);
+const W = Math.max(2, Math.round(Number(params.get('w')) || 1920));
+const H = Math.max(2, Math.round(Number(params.get('h')) || 1080));
 const RENDER = params.get('render') === '1';
 const INITIAL_T = Number(params.get('t') || 0);
 const AUTOPLAY = params.get('autoplay') === '1';
 const POST = params.get('post') !== '0';
 const p5 = window.p5;
+
+window.__renderMode = RENDER;
+window.__renderSize = { width: W, height: H };
 
 if (!p5) throw new Error('p5 未加载：请通过 tools/serve.mjs 打开预览页');
 
@@ -32,6 +34,22 @@ new p5((p) => {
   let ui = null;
   let lastHud = '';
   const audio = createAudioEngine();
+
+  // Intro/Outro 内部按 1920×1080 编排；放大到 4K 时用矢量缩放，
+  // 文字和线稿仍按最终分辨率渲染，而不是先画小再拉伸。
+  function drawIntroFrame(g, t) {
+    g.push();
+    g.scale(W / 1920, H / 1080);
+    drawIntro(g, t);
+    g.pop();
+  }
+
+  function drawOutroFrame(g, t) {
+    g.push();
+    g.scale(W / 1920, H / 1080);
+    drawOutro(g, t, snapshots);
+    g.pop();
+  }
 
   p.setup = async () => {
     p.pixelDensity(1);
@@ -51,7 +69,7 @@ new p5((p) => {
     if (!RENDER && AUTOPLAY) clock.play();
 
     await document.fonts.ready;
-    drawIntro(transA, 5.0);
+    drawIntroFrame(transA, 5.0);
     snapshots = makeSnapshots(p);
 
     window.__seek = async (time) => {
@@ -79,9 +97,14 @@ new p5((p) => {
     // 离线音频导出：渲染完整 137s，再按 384KB 分块交给 Puppeteer 写盘。
     // 实时预览与这里共用 src/audio/score.js 和 Synth。
     if (RENDER) {
-      window.__renderAudio = async () => {
-        console.log('offline audio render start');
-        const buffer = await renderAudioOffline(44100);
+      window.__renderAudio = async (options = {}) => {
+        const start = Number(options.start) || 0;
+        const duration =
+          options.duration == null ? null : Number(options.duration);
+        console.log(
+          `offline audio render start ${start}s${duration == null ? ' (full)' : ` + ${duration}s`}`
+        );
+        const buffer = await renderAudioOffline(44100, { start, duration });
         console.log(`offline audio render done ${buffer.duration.toFixed(2)}s`);
         const wav = encodeWav(buffer);
         console.log(`wav encode ${(wav.length / 1048576).toFixed(1)}MB`);
@@ -144,11 +167,11 @@ new p5((p) => {
 
     g.background(0);
     if (loc.part === 'intro') {
-      drawIntro(g, t);
+      drawIntroFrame(g, t);
     } else if (loc.part === 'block') {
       drawBlock(g, t, loc, W, H);
     } else {
-      drawOutro(g, t, snapshots);
+      drawOutroFrame(g, t);
     }
     if (POST) drawGlobalPost(g, t, loc, W, H);
   }
@@ -164,13 +187,14 @@ new p5((p) => {
     const seam = W * (1 - k);
     if (seam > 1 && seam < W - 1) {
       const ctx = g.drawingContext;
+      const seamW = 130 * (W / 1920);
       ctx.save();
-      const grad = ctx.createLinearGradient(seam - 130, 0, seam + 130, 0);
+      const grad = ctx.createLinearGradient(seam - seamW, 0, seam + seamW, 0);
       grad.addColorStop(0, 'rgba(239,229,210,0)');
       grad.addColorStop(0.5, 'rgba(231,216,188,0.34)');
       grad.addColorStop(1, 'rgba(227,210,176,0)');
       ctx.fillStyle = grad;
-      ctx.fillRect(seam - 130, 0, 260, H);
+      ctx.fillRect(seam - seamW, 0, seamW * 2, H);
       ctx.restore();
     }
   }

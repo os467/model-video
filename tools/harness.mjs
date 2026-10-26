@@ -5,7 +5,10 @@ export const CHROME_PATH =
   process.env.CHROME_PATH ||
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 
-export async function withRenderPage(fn, { query = '' } = {}) {
+export async function withRenderPage(
+  fn,
+  { query = '', width = 1920, height = 1080 } = {}
+) {
   const { port, close } = await startServer(0);
   let browser;
 
@@ -14,7 +17,7 @@ export async function withRenderPage(fn, { query = '' } = {}) {
       executablePath: CHROME_PATH,
       headless: true,
       protocolTimeout: 180000,
-      defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
+      defaultViewport: { width, height, deviceScaleFactor: 1 },
       args: [
         '--disable-gpu',
         '--hide-scrollbars',
@@ -27,7 +30,7 @@ export async function withRenderPage(fn, { query = '' } = {}) {
     });
 
     const page = await browser.newPage();
-    await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
 
     page.on('console', (msg) => {
       if (msg.type() === 'error') console.error('[page]', msg.text());
@@ -36,7 +39,7 @@ export async function withRenderPage(fn, { query = '' } = {}) {
       console.error('[pageerror]', error.message);
     });
 
-    const url = `http://127.0.0.1:${port}/src/index.html?render=1${query}`;
+    const url = `http://127.0.0.1:${port}/src/index.html?render=1&w=${width}&h=${height}${query}`;
     await page.goto(url, { waitUntil: 'load', timeout: 60000 });
     await page.waitForFunction('window.__ready === true', { timeout: 120000 });
     await page.evaluate(() => document.fonts.ready);
