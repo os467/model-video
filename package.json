@@ -13,9 +13,11 @@
     "render:audio:sample": "node tools/render-audio.mjs --start 109 --duration 10 --out out/audio/sample_10s.wav",
     "render:sample": "node tools/render-frames.mjs --start 0 --end 30 --fps 30 --out out/frames/sample",
     "render:sample4k": "node tools/render-frames.mjs --start 109 --end 119 --fps 60 --width 3840 --height 2160 --out out/frames/sample_4k60",
+    "render:final4k": "node tools/render-frames.mjs --start 0 --end 137 --fps 60 --width 3840 --height 2160 --out out/frames/final_4k60",
     "sheet:sample": "node tools/contact-sheet.mjs --dir out/frames/sample --out out/contact-sheet.png",
     "encode:sample": "node tools/encode.mjs --dir out/frames/sample --out out/sample_1080p30.mp4",
-    "encode:sample4k": "node tools/encode.mjs --dir out/frames/sample_4k60 --fps 60 --audio out/audio/sample_10s.wav --out out/sample_4k60_10s.mp4"
+    "encode:sample4k": "node tools/encode.mjs --dir out/frames/sample_4k60 --fps 60 --audio out/audio/sample_10s.wav --out out/sample_4k60_10s.mp4",
+    "encode:final4k": "node tools/encode.mjs --dir out/frames/final_4k60 --fps 60 --audio out/audio/score.wav --out out/calculating-spirit_4k60.mp4"
   },
   "dependencies": {
     "p5": "2.3.4"

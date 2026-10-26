@@ -7,7 +7,7 @@ export const CHROME_PATH =
 
 export async function withRenderPage(
   fn,
-  { query = '', width = 1920, height = 1080 } = {}
+  { query = '', width = 1920, height = 1080, gpu = false } = {}
 ) {
   const { port, close } = await startServer(0);
   let browser;
@@ -19,7 +19,7 @@ export async function withRenderPage(
       protocolTimeout: 180000,
       defaultViewport: { width, height, deviceScaleFactor: 1 },
       args: [
-        '--disable-gpu',
+        ...(gpu ? [] : ['--disable-gpu']),
         '--hide-scrollbars',
         '--force-device-scale-factor=1',
         '--force-color-profile=srgb',

@@ -8,6 +8,7 @@ const end = Number(args.end ?? 30);
 const fps = Number(args.fps ?? 30);
 const width = Number(args.width ?? 1920);
 const height = Number(args.height ?? 1080);
+const gpu = args.gpu === '0' ? false : width >= 2560;
 const outDir = path.resolve(args.out ?? 'out/frames/sample');
 
 if (!(end > start)) throw new Error('--end 必须大于 --start');
@@ -37,7 +38,8 @@ await withRenderPage(async (page) => {
       path: file,
       type: 'png',
       clip: { x: 0, y: 0, width, height },
-      captureBeyondViewport: false
+      captureBeyondViewport: false,
+      optimizeForSpeed: true
     });
 
     if (i % 60 === 0 || i === total - 1) {
@@ -50,7 +52,7 @@ await withRenderPage(async (page) => {
       );
     }
   }
-}, { width, height });
+}, { width, height, gpu });
 
 const elapsed = (Date.now() - started) / 1000;
 console.log(`完成：${total} 帧，用时 ${elapsed.toFixed(1)}s`);
