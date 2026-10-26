@@ -121,11 +121,12 @@ const TIP_KEYS = [
   { t: 2.76, x: 750, y: 601, rot: -0.010 },
   { t: 2.80, x: 757, y: 612, rot: -0.040 },
   { t: 2.94, x: 757, y: 612, rot: -0.040 },
-  { t: 4.00, x: 757, y: 612, rot: -0.040 },
-  { t: 4.20, x: 757, y: 602, rot: -0.060 },
-  { t: 4.60, x: 770, y: 460, rot: -0.100 },
-  { t: 5.10, x: 795, y: 110, rot: -0.140 },
-  { t: 6.00, x: 810, y: 60, rot: -0.150 }
+  { t: 4.00, x: 757, y: 612, rot: -0.040, scale: 1.0 },
+  { t: 4.20, x: 760, y: 608, rot: -0.030, scale: 0.98 },
+  { t: 4.60, x: 850, y: 602, rot: 0.000, scale: 0.84 },
+  { t: 5.10, x: 1030, y: 598, rot: 0.020, scale: 0.60 },
+  { t: 5.60, x: 1180, y: 606, rot: 0.020, scale: 0.36 },
+  { t: 6.00, x: 1294, y: 630, rot: 0.020, scale: 0.12 }
 ];
 
 // 尖端关键帧整体套用同一工作区偏移，避免逐项漏改。
@@ -436,7 +437,9 @@ function strikePress(t) {
 
 function tipKeyAt(t) {
   let a = TIP_KEYS[0];
-  if (t <= a.t) return { x: a.x, y: a.y, rot: a.rot };
+  if (t <= a.t) {
+    return { x: a.x, y: a.y, rot: a.rot, scale: a.scale ?? 1 };
+  }
   for (let i = 1; i < TIP_KEYS.length; i++) {
     const b = TIP_KEYS[i];
     if (t <= b.t) {
@@ -444,12 +447,13 @@ function tipKeyAt(t) {
       return {
         x: a.x + (b.x - a.x) * k,
         y: a.y + (b.y - a.y) * k,
-        rot: a.rot + (b.rot - a.rot) * k
+        rot: a.rot + (b.rot - a.rot) * k,
+        scale: (a.scale ?? 1) + ((b.scale ?? 1) - (a.scale ?? 1)) * k
       };
     }
     a = b;
   }
-  return { x: a.x, y: a.y, rot: a.rot };
+  return { x: a.x, y: a.y, rot: a.rot, scale: a.scale ?? 1 };
 }
 
 function flintPose(t) {
@@ -459,14 +463,16 @@ function flintPose(t) {
   const pressDepth = press > 0 ? 0.8 + 3.2 * press : 0;
   const tipXDesired = key.x;
   const tipYDesired = key.y + pressDepth;
+  const scale = key.scale ?? 1;
+  const tipLen = TIP_LEN * scale;
 
   const rot = key.rot;
-  const x = tipXDesired + Math.sin(rot) * TIP_LEN;
-  const y = tipYDesired - Math.cos(rot) * TIP_LEN;
+  const x = tipXDesired + Math.sin(rot) * tipLen;
+  const y = tipYDesired - Math.cos(rot) * tipLen;
 
   // 用最终变换反解真实尖端，影子/接触判断都跟它走。
-  const tipX = x - Math.sin(rot) * TIP_LEN;
-  const tipY = y + Math.cos(rot) * TIP_LEN;
+  const tipX = x - Math.sin(rot) * tipLen;
+  const tipY = y + Math.cos(rot) * tipLen;
   const lift = Math.max(0, MARKS_BASE_Y - tipY);
 
   let strikeIndex = -1;
@@ -485,6 +491,7 @@ function flintPose(t) {
     tipX,
     tipY,
     lift,
+    scale,
     contact: lift < 0.4 || (press > 0.025 && lift < 1.0),
     strikeIndex,
     chipAge
@@ -515,7 +522,7 @@ function drawFlint(p, pose) {
   p.push();
   p.translate(pose.x, pose.y);
   p.rotate(pose.rot);
-  p.scale(1.12);
+  p.scale(1.12 * pose.scale);
 
   // 燧石本体：一个带明显下尖的石片
   fillHex(p, C.flint, 1);
@@ -580,6 +587,17 @@ function drawFlint(p, pose) {
   }
 
   p.pop();
+
+  // 退出时石身缩小，但火种不能跟着消失：留一颗独立的暖色核心，
+  // 让第 2 版块的笔尖从同一个位置接上。
+  const emberK = clamp(1 - pose.scale, 0, 1);
+  if (emberK > 0.05) {
+    p.noStroke();
+    fillHex(p, C.rust, 0.10 + 0.18 * emberK);
+    p.ellipse(pose.tipX, pose.tipY, 18 + 18 * emberK, 14 + 12 * emberK);
+    fillHex(p, C.rustLight, 0.72 + 0.24 * emberK);
+    p.ellipse(pose.tipX, pose.tipY, 3.4 + 2.2 * emberK, 3.4 + 2.2 * emberK);
+  }
 }
 
 export default {

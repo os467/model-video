@@ -922,7 +922,7 @@ function drawTable(p, t) {
 
 // ---------------------------------------------------------------- 尖笔（主角）
 
-function drawStylus(p, x, t) {
+function drawStylus(p, x, t, spawn = 1) {
   const freeze = freezeAmount(t);
   const press = pressPulse(t) * (1 - freeze);
   const tap = tapPulse(t) * freeze;
@@ -954,6 +954,8 @@ function drawStylus(p, x, t) {
   p.push();
   p.translate(x, tipY);
   p.rotate(angle);
+  // 从第 1 版块石头的火种位置长出：入场 0.28s 内由 0.18 放大到 1。
+  p.scale(spawn);
 
   // 深色轮廓
   p.noStroke();
@@ -1155,6 +1157,8 @@ export default {
   drawActor(p, state) {
     // drawActor 直接吃世界坐标，主调度没有 translate 到版块起点；
     // 不能再减版块偏移，否则尖笔会被画到镜头外。
-    drawStylus(p, state.x, q10(state.localT || 0));
+    const t = q10(state.localT || 0);
+    const spawn = 0.18 + 0.82 * smoothstep(0, 0.28, t);
+    drawStylus(p, state.x, t, spawn);
   }
 };
