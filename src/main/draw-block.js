@@ -11,6 +11,7 @@ import {
 } from '../beat/timeline.js';
 import { applyCamera, cameraAt, visibleWorldRange } from '../kit/camera.js';
 import { GROUPS, groupForBlock, fillHex, mixHex } from '../kit/palette.js';
+import { drawBlockFx } from '../kit/fx.js';
 import { drawRoad } from '../kit/road.js';
 import { smoothstep } from '../kit/rng.js';
 import { drawPuppet } from '../rig/puppet.js';
@@ -81,6 +82,8 @@ export function drawBlock(p, t, loc, width, height) {
   }
   p.pop();
 
+  // 全片共用的气氛层：纸尘/火星/扫描线/数据流，强度随笔段递增。
+  drawBlockFx(p, t, loc, width, height);
   drawVignette(p, width, height);
 }
 

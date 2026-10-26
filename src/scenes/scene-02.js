@@ -56,6 +56,10 @@ const FILL_STEP = 0.105;
 
 // ---------------------------------------------------------------- 小工具
 
+function mix(a, b, k) {
+  return a + (b - a) * k;
+}
+
 function q10(t) {
   return Math.floor(clamp(t, 0, 6) * 10 + 1e-9) / 10;
 }
@@ -1207,9 +1211,40 @@ export default {
       x = state.x + (blockOrigin + first.x - state.x) * fly;
       baseY = ROAD_Y + (first.y + 16 - ROAD_Y) * fly;
     } else {
-      x = blockOrigin + cell.x;
-      baseY = cell.y + 16;
+      const cellX = blockOrigin + cell.x;
+      const cellY = cell.y + 16;
+      // 填完 16 格后笔不再停在最后一格：抬到桌面中心，
+      // 看 4×4 表裂开/拼合，随后沿桌沿滑到接缝交出火种。
+      const centerX = blockOrigin + 685;
+      const centerY = 435 + 5 * smoothstep(3.86, 4.12, t);
+      const toCenter = smoothstep(2.26, 2.82, t);
+      const toExit = smoothstep(4.12, 6.0, t);
+      const arc = Math.sin(Math.PI * clamp((t - 2.26) / 0.56, 0, 1)) * 18;
+      const drift =
+        smoothstep(2.82, 3.0, t) * (1 - smoothstep(3.86, 4.08, t));
+
+      x = mix(cellX, centerX, toCenter);
+      baseY = mix(cellY, centerY, toCenter) - arc;
+      x += Math.sin((t - 2.82) * 1.7) * 6 * drift;
+      baseY += Math.sin((t - 2.82) * 2.2) * 2 * drift;
+      x = mix(x, blockOrigin + 1000, toExit);
+      baseY = mix(baseY, 610, toExit);
     }
+
+    // 离场时留一条很淡的暖色划痕，解释笔为什么向右滑。
+    if (t > 4.05) {
+      const fade = smoothstep(4.05, 4.45, t) * (1 - smoothstep(5.9, 6.0, t));
+      const x0 = blockOrigin + TABLE.x1;
+      const w = Math.max(0, x - x0);
+      p.push();
+      p.noStroke();
+      fillHex(p, C.ember, 0.09 * fade);
+      p.rect(x0, 618, w, 2.2, 1);
+      fillHex(p, C.emberHot, 0.13 * fade);
+      p.rect(x0, 621, w * 0.92, 0.8, 1);
+      p.pop();
+    }
+
     drawStylus(p, x, t, spawn, baseY);
   }
 };

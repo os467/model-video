@@ -342,6 +342,34 @@ function paintFieldMid(p, cx, t, y0, y1) {
   drawEntryBloom(p, cx, t, y0, y1);
 }
 
+// 19→20：第 20 版块只在接缝左侧补一层暖白羽化，
+// 让第 19 版的城市线稿像被光吃掉一样散进留白；不改第 19 版文件。
+function drawLeftDissolve(p, t, y0, y1, withMotes) {
+  const ctx = p.drawingContext;
+  ctx.save();
+  const g = ctx.createLinearGradient(-340, 0, 0, 0);
+  g.addColorStop(0, 'rgba(244,240,230,0)');
+  g.addColorStop(0.55, 'rgba(244,240,230,0.55)');
+  g.addColorStop(1, 'rgba(244,240,230,1)');
+  ctx.fillStyle = g;
+  ctx.fillRect(-340, y0, 340, y1 - y0);
+  ctx.restore();
+
+  if (!withMotes) return;
+  const fade = 1 - smoothstep(0.5, 1.8, t);
+  if (fade <= 0.003) return;
+  p.push();
+  p.noStroke();
+  for (let i = 0; i < 14; i++) {
+    const x = -330 + hash2(i, 801) * 310;
+    const y = 250 + hash2(i, 802) * 460;
+    const a = (0.12 + 0.2 * hash2(i, 803)) * fade;
+    fillHex(p, i % 3 === 0 ? C.emberHot : C.ember, a);
+    p.ellipse(x, y, 1.4 + hash2(i, 804) * 2.6, 1.2 + hash2(i, 805) * 1.6);
+  }
+  p.pop();
+}
+
 function drawField(p, t) {
   const cx = cameraLocalX(t);
   p.push();
@@ -405,64 +433,46 @@ function drawField(p, t) {
   p.pop();
 }
 
-// 右侧 / 远处的一团未收拢微光；只是一些开口弧和光点，没有具体答案。
-function drawUnnamed(p, t) {
-  const cx = cameraLocalX(t) + 352;
-  const cy = 388;
-  const reveal = smoothstep(2.55, 3.05, t);
+// 火种的外圈：把原来飘到右侧的“未命名”弧光收回来，
+// 以智能体为圆心重新排成一组不同心的开口环。越看越像同一个东西。
+function drawCorona(p, t, reveal, later, look) {
   if (reveal <= 0.003) return;
-
-  // 0.5→1 的展开进度；到结尾也保持开口。
-  const grow = 0.5 + 0.5 * smoothstep(2.55, 4.7, t);
+  const grow = 0.5 + 0.5 * smoothstep(1.0, 4.7, t);
   const breath = 0.5 + 0.5 * Math.sin(t * 0.7 + 1.2);
 
   p.push();
+  p.translate(-4 * look, 0);
   p.noStroke();
 
+  // 统一的外层暖光，先把各个开口环托在一起。
   radialWash(
     p,
-    cx,
-    cy,
-    18,
-    158,
+    0,
+    0,
+    24,
+    166,
     [
-      [0, `rgba(255,250,238,${0.32 * reveal})`],
-      [0.55, `rgba(253,248,236,${0.15 * reveal})`],
+      [0, `rgba(255,250,238,${0.08 * reveal * later})`],
+      [0.52, `rgba(253,248,236,${0.035 * reveal * later})`],
       [1, 'rgba(253,248,236,0)']
     ],
-    cx - 170,
-    cy - 170,
-    340,
-    340
-  );
-  radialWash(
-    p,
-    cx + 12,
-    cy - 8,
-    10,
-    118,
-    [
-      [0, `rgba(208,193,167,${0.11 * reveal})`],
-      [0.6, `rgba(198,187,166,${0.045 * reveal})`],
-      [1, 'rgba(198,187,166,0)']
-    ],
-    cx - 135,
-    cy - 135,
-    294,
-    294
+    -180,
+    -180,
+    360,
+    360
   );
 
   for (let i = 0; i < SHAPE_ARCS.length; i++) {
     const a = SHAPE_ARCS[i];
     const sway = Math.sin(t * 0.3 + a.phase) * 1.2;
-    const arcAlpha = a.alpha * reveal * (0.76 + 0.24 * breath);
-    const rx = a.rx * (0.94 + 0.06 * grow) + sway;
-    const ry = a.ry * (0.94 + 0.06 * grow);
-    const rot = a.rot + Math.sin(t * 0.22 + a.phase) * 0.02;
+    const arcAlpha = a.alpha * reveal * later * (0.95 + 0.3 * breath) * 1.3;
+    const rx = a.rx * (0.85 + 0.35 * grow) + sway;
+    const ry = a.ry * (0.85 + 0.35 * grow);
+    const rot = a.rot + Math.sin(t * 0.22 + a.phase) * 0.02 + t * 0.012 * (i % 2 ? 1 : -1);
     drawOpenArc(
       p,
-      cx + a.dx,
-      cy + a.dy,
+      a.dx,
+      a.dy,
       rx,
       ry,
       rot,
@@ -470,46 +480,48 @@ function drawUnnamed(p, t) {
       a.span * grow,
       a.color,
       arcAlpha,
-      a.weight,
-      38,
-      0.025
+      a.weight * 1.15,
+      44,
+      0.03
     );
     drawOpenArc(
       p,
-      cx + a.dx,
-      cy + a.dy,
+      a.dx,
+      a.dy,
       rx + 2.5,
       ry + 2.5,
       rot,
       a.a0,
       a.span * grow,
       a.color,
-      arcAlpha * 0.22,
-      a.weight + 1.6,
-      38,
-      0.025
+      arcAlpha * 0.24,
+      a.weight + 1.8,
+      44,
+      0.03
     );
   }
   p.noStroke();
 
   for (const g of SHAPE_GLINTS) {
-    const ga = smoothstep(2.7 + g.delay * 0.6, 3.2 + g.delay * 0.6, t);
+    const ga = smoothstep(0.8 + g.delay * 0.9, 1.6 + g.delay * 0.9, t);
     if (ga <= 0.003) continue;
-    const ang = g.a + t * 0.025;
-    const gx = cx + Math.cos(ang) * g.rx;
-    const gy = cy + Math.sin(ang) * g.ry * 0.72;
-    const a = (0.12 + 0.18 * (0.5 + 0.5 * Math.sin(t * 0.9 + g.phase))) * reveal * ga;
-    fillHex(p, g.warm ? C.grainWarm : C.grainCool, a);
-    p.ellipse(gx, gy, g.size, g.size);
-    if (g.size > 1.7) {
-      fillHex(p, g.warm ? C.cream : C.bgLight, a * 0.35);
-      p.ellipse(gx, gy, g.size * 4, g.size * 4);
+    const ang = g.a + t * 0.03;
+    const gx = Math.cos(ang) * g.rx * (0.9 + 0.2 * grow);
+    const gy = Math.sin(ang) * g.ry * 0.72 * (0.9 + 0.2 * grow);
+    const pulse = 0.5 + 0.5 * Math.sin(t * 0.9 + g.phase);
+    const a = (0.1 + 0.2 * pulse) * reveal * later * ga;
+    const size = g.size * 1.35;
+    fillHex(p, g.warm ? C.emberHot : C.cyanSoft, a);
+    p.ellipse(gx, gy, size, size);
+    if (g.size > 1.4) {
+      fillHex(p, g.warm ? C.cream : C.bgLight, a * 0.3);
+      p.ellipse(gx, gy, size * 4, size * 4);
     }
   }
 
-  // 形状中心只有一点没有指向性的暖白微光。
-  fillHex(p, C.cream, 0.12 * reveal * (0.7 + 0.3 * breath));
-  p.ellipse(cx + 10, cy - 10, 12, 12);
+  // 圆心一点没有指向性的暖白微光，和火种芯分开。
+  fillHex(p, C.cream, 0.06 * reveal * later * (0.7 + 0.3 * breath));
+  p.ellipse(10, -10, 12, 12);
   p.pop();
 }
 
@@ -654,6 +666,9 @@ function drawTrailRoad(p, t) {
     }
   }
 
+  // 场景和路都画完后，再压一层全高羽化，盖住第 19 版留下的深色路带。
+  drawLeftDissolve(p, t, 0, 1000, true);
+
   p.pop();
 }
 
@@ -668,15 +683,15 @@ function drawEmberActor(p, state) {
   const look = smoothstep(1.95, 2.9, poseT);
   const quiverEnv = smoothstep(2.7, 2.8, t) * (1 - smoothstep(2.9, 2.97, t));
   const quiver = Math.sin(t * 55) * quiverEnv * 1.3;
-  const bob =
-    Math.sin(poseT * 2.1) * 1.2 * (1 - smoothstep(1.6, 2.3, poseT));
-  // 2s 呼吸；3.0–4.0 定格时相位停住，第 3 小节再接着呼吸。
-  const breathPhase = t < 3 ? t : t < 4 ? 3 : t - 1;
-  const breath = 0.5 + 0.5 * Math.sin(breathPhase * Math.PI + 0.6);
-  const later = 1 - 0.1 * smoothstep(4.4, 5.8, t);
+  // 不再在 3–4s 把呼吸冻住：持续轻微上浮/横移，让镜头一直有跟随理由。
+  const bob = Math.sin(t * 1.7) * 1.1;
+  const breath = 0.5 + 0.5 * Math.sin(t * Math.PI + 0.6);
+  const driftX = Math.sin(t * 0.55 + 0.2) * 6 + Math.sin(t * 1.35) * 2.2;
+  const driftY = Math.sin(t * 1.1 + 1.4) * 2.2;
+  const later = 1 - 0.06 * smoothstep(4.4, 5.8, t);
   const baseX = Number.isFinite(state.x) ? state.x : 19000;
-  const ax = baseX + LOOK_AHEAD + quiver;
-  const ay = 466 - bob;
+  const ax = baseX + LOOK_AHEAD + quiver + driftX - 10 * look;
+  const ay = 466 - bob - driftY;
 
   p.push();
   p.translate(ax, ay);
@@ -769,6 +784,9 @@ function drawEmberActor(p, state) {
   }
   p.noStroke();
 
+  // 外圈大弧：随标题淡出而展开，始终围着火种，不再飘到右侧。
+  drawCorona(p, t, smoothstep(1.0, 2.8, t), later, look);
+
   // 中心同一颗暖赭火种 + 极小的火苗；没有机械外壳。
   fillHex(p, C.emberDeep, 0.2 * appear * later);
   p.ellipse(0, 0, 12.5, 14.5);
@@ -800,7 +818,6 @@ export default {
     p.push();
     p.noStroke();
     drawField(p, t);
-    drawUnnamed(p, t);
 
     const showTitle =
       state.blockIndex === currentBlockAt(state.globalT, state.blockIndex);
