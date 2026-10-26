@@ -5,6 +5,7 @@ import {
 } from '../beat/timeline.js';
 import { smoothstep } from '../kit/rng.js';
 import { Clock } from '../kit/clock.js';
+import { createAudioEngine, encodeWav, renderAudioOffline } from '../audio/engine.js';
 import { SCENES } from '../scenes/index.js';
 import { drawBlock } from './draw-block.js';
 import { drawIntro } from './intro.js';
@@ -28,6 +29,7 @@ new p5((p) => {
   let transA = null;
   let ui = null;
   let lastHud = '';
+  const audio = createAudioEngine();
 
   p.setup = async () => {
     p.pixelDensity(1);
@@ -65,6 +67,46 @@ new p5((p) => {
       };
     };
 
+    window.__audioState = () => ({
+      hasContext: !!audio.context,
+      state: audio.context ? audio.context.state : 'none',
+      playing: audio.playing,
+      muted: audio.muted
+    });
+
+    // 离线音频导出：渲染完整 137s，再按 384KB 分块交给 Puppeteer 写盘。
+    // 实时预览与这里共用 src/audio/score.js 和 Synth。
+    if (RENDER) {
+      window.__renderAudio = async () => {
+        console.log('offline audio render start');
+        const buffer = await renderAudioOffline(44100);
+        console.log(`offline audio render done ${buffer.duration.toFixed(2)}s`);
+        const wav = encodeWav(buffer);
+        console.log(`wav encode ${(wav.length / 1048576).toFixed(1)}MB`);
+        if (typeof window.__audioChunk === 'function') {
+          const CHUNK = 384 * 1024;
+          for (let i = 0; i < wav.length; i += CHUNK) {
+            const sub = wav.subarray(i, i + CHUNK);
+            let binary = '';
+            for (let j = 0; j < sub.length; j += 8192) {
+              binary += String.fromCharCode.apply(null, sub.subarray(j, j + 8192));
+            }
+            await window.__audioChunk(
+              btoa(binary),
+              i === 0,
+              i + CHUNK >= wav.length
+            );
+          }
+        }
+        return {
+          sampleRate: buffer.sampleRate,
+          duration: buffer.duration,
+          channels: buffer.numberOfChannels,
+          bytes: wav.length
+        };
+      };
+    }
+
     if (!RENDER) {
       ui = setupUI();
       setupKeys();
@@ -81,6 +123,7 @@ new p5((p) => {
   p.draw = () => {
     const t = clock.time;
     const loc = locate(t);
+    if (!clock.playing && audio.playing) audio.pause();
     renderFrame(p, t, loc);
 
     if (!RENDER && ui) {
@@ -140,6 +183,7 @@ new p5((p) => {
     const scrub = document.getElementById('scrub');
     const time = document.getElementById('time');
     const blockname = document.getElementById('blockname');
+    const mute = document.getElementById('mute');
 
     scrub.max = String(TOTAL_DURATION);
     scrub.step = '0.01';
@@ -148,17 +192,36 @@ new p5((p) => {
     play.addEventListener('click', () => {
       if (clock.playing) {
         clock.pause();
+        audio.pause();
       } else {
         if (clock.time >= TOTAL_DURATION - 1e-6) clock.seek(0);
+        const ctx = audio.ensure();
+        clock.attachAudioContext(ctx);
         clock.play();
+        audio.start(clock.time);
       }
     });
 
     scrub.addEventListener('input', () => {
+      const wasPlaying = clock.playing;
       clock.seek(Number(scrub.value));
+      if (wasPlaying) audio.seek(clock.time);
+      else audio.pause();
     });
 
-    return { play, scrub, time, blockname, lastTime: '' };
+    if (mute) {
+      const syncMute = () => {
+        mute.textContent = audio.muted ? '×' : '♪';
+        mute.title = audio.muted ? '打开声音' : '静音';
+      };
+      mute.addEventListener('click', () => {
+        audio.setMuted(!audio.muted);
+        syncMute();
+      });
+      syncMute();
+    }
+
+    return { play, scrub, time, blockname, mute, lastTime: '' };
   }
 
   function setupKeys() {

@@ -34,7 +34,8 @@ export function drawIntro(p, t) {
   p.text('计算与智能通史 · 卷一', 120, 92);
 
   const a1 = smoothstep(0.45, 0.9, t) * (1 - smoothstep(4.75, 5.0, t));
-  const a2 = smoothstep(4.3, 4.62, t);
+  // 第二句提前到 2.6s，让“计算机”这句话在切到第 1 版前完整停留约 2 秒。
+  const a2 = smoothstep(2.6, 2.9, t);
 
   p.textAlign(p.CENTER, p.CENTER);
   p.textFont(SERIF);
@@ -47,7 +48,7 @@ export function drawIntro(p, t) {
   p.text('——早在“计算机”这个词被发明之前。', W / 2, 790);
 
   p.textSize(18);
-  fillHex(p, paper.ink, 0.58 * smoothstep(4.5, 4.9, t));
+  fillHex(p, paper.ink, 0.58 * smoothstep(3.2, 3.6, t));
   p.textAlign(p.CENTER, p.BOTTOM);
   p.text('——《计算与智能通史》，卷一（虚构书名）', W / 2, H - 70);
 
