@@ -38,20 +38,21 @@ const C = {
 };
 
 const TABLE = {
-  x0: 520,
-  x1: 880,
-  y0: 330,
+  x0: 460,
+  x1: 910,
+  y0: 270,
   y1: 610,
   cols: 4,
   rows: 4,
-  cellW: 90,
-  cellH: 70
+  cellW: 112.5,
+  cellH: 85
 };
 
 const ROAD_Y = 630;
 const LOCAL_X_PER_SECOND = 1000 / 6;
-const FILL_START = 0.34;
-const FILL_STEP = 0.125;
+// 笔先飞到第一格，表格随每次压印填；最后一格约 2.22s 完成。
+const FILL_START = 0.58;
+const FILL_STEP = 0.105;
 
 // ---------------------------------------------------------------- 小工具
 
@@ -564,6 +565,23 @@ function cellFilled(idx, t) {
   return t + 1e-9 >= cellFillTime(idx);
 }
 
+function cellCenter(idx) {
+  const row = Math.floor(idx / TABLE.cols);
+  const col = idx % TABLE.cols;
+  return {
+    x: TABLE.x0 + (col + 0.5) * TABLE.cellW,
+    y: TABLE.y0 + (row + 0.5) * TABLE.cellH
+  };
+}
+
+function activeCellIndex(t) {
+  let active = 0;
+  for (let i = 0; i < TABLE.cols * TABLE.rows; i++) {
+    if (cellFilled(i, t)) active = i;
+  }
+  return active;
+}
+
 function tableState(t) {
   // 2.62 裂开 → 2.76 完全散开 → 2.98 重新拼好 → 3.86 后落回
   const out = smoothstep(2.62, 2.76, t) * (1 - smoothstep(2.84, 2.98, t));
@@ -779,9 +797,28 @@ function drawCellContent(p, idx, row, col, t, ts) {
   const numAlpha = 0.84 - 0.3 * ts.emphasis;
   const smallAlpha = 0.38 - 0.16 * ts.emphasis;
 
-  // 左上角是小序号，下方是它的平方数（1080p 下主数字约 13–26px 高）
-  drawCuneiform(p, n, -37, -23, 2.3, C.inkSoft, smallAlpha, smallAlpha * 0.35, 'left');
-  drawCuneiform(p, n * n, 0, 8, 5.0, C.ink, numAlpha, numAlpha * 0.22, 'center');
+  // 左上角小序号；主平方数放大到约 30–40px 高，填满更大的格。
+  drawCuneiform(p, n, -45, -29, 3.4, C.inkSoft, smallAlpha, smallAlpha * 0.35, 'left');
+  drawCuneiform(p, n * n, 0, 10, 7.4, C.ink, numAlpha, numAlpha * 0.22, 'center');
+}
+
+// 左下的“边 30 / 对角线”参考图形：只画自创的方形、对角线和楔形数字，
+// 让第 1 小节左侧不再空，也不复制任何文物照片。
+function drawLeftExample(p, t) {
+  const a = smoothstep(0.2, 0.85, t) * (1 - smoothstep(4.2, 5.2, t));
+  if (a <= 0.002) return;
+  p.push();
+  p.translate(64, 540);
+  p.noFill();
+  strokeHex(p, C.groove, 0.34 * a);
+  p.strokeWeight(1.7);
+  p.rect(0, 0, 80, 80);
+  p.line(0, 80, 80, 0);
+  p.line(0, 0, 80, 80);
+  p.noStroke();
+  drawCuneiform(p, 30, 40, 74, 3.0, C.inkSoft, 0.55 * a, 0.16 * a, 'center');
+  drawCuneiform(p, 42, 46, 94, 2.8, C.ochre, 0.5 * a, 0.12 * a, 'center');
+  p.pop();
 }
 
 function drawImpact(p, t) {
@@ -922,27 +959,27 @@ function drawTable(p, t) {
 
 // ---------------------------------------------------------------- 尖笔（主角）
 
-function drawStylus(p, x, t, spawn = 1) {
+function drawStylus(p, x, t, spawn = 1, baseY = ROAD_Y) {
   const freeze = freezeAmount(t);
   const press = pressPulse(t) * (1 - freeze);
   const tap = tapPulse(t) * freeze;
   const tipLift = 3 - 5.5 * press + 8 * freeze - 6.5 * tap;
-  const tipY = ROAD_Y - tipLift;
+  const tipY = baseY - tipLift;
   const angle = 0.13 + 0.015 * press + 0.03 * freeze;
 
-  // 泥面上的影子
+  // 接触面的影子；随笔落在表格单元上，而不是永远在路面。
   p.noStroke();
   fillHex(p, C.ink, 0.1 + 0.06 * press + 0.02 * freeze);
-  p.ellipse(x + 7, 633, 42 - 6 * press + 8 * freeze, 8 + 2 * freeze);
+  p.ellipse(x + 7, baseY + 3, 42 - 6 * press + 8 * freeze, 8 + 2 * freeze);
   fillHex(p, C.ink, 0.04 + 0.03 * press);
-  p.ellipse(x + 15, 636, 36, 3.5);
+  p.ellipse(x + 15, baseY + 6, 36, 3.5);
 
   // 压下时泥面向外微鼓
   if (press > 0.1) {
     fillHex(p, C.mudPale, 0.14 * press);
-    p.ellipse(x, ROAD_Y + 1.5, 22, 6);
+    p.ellipse(x, baseY + 1.5, 22, 6);
     fillHex(p, C.mudDark, 0.09 * press);
-    p.ellipse(x, ROAD_Y + 2, 15, 3.6);
+    p.ellipse(x, baseY + 2, 15, 3.6);
   }
 
   // 火种的暖光
@@ -1093,9 +1130,9 @@ export default {
     drawPits(p);
     drawEdgeCracks(p);
     drawDryMud(p, t);
+    drawLeftExample(p, t);
     drawBaseline(p);
     drawTable(p, t);
-    drawRoadMarks(p, t);
 
     // 标题卡只属于当前版块；年代小字后面垫一条深泥色窄带，
     // 让 paper 组偏浅的 era 色在湿泥底上也能读。
@@ -1155,10 +1192,24 @@ export default {
   },
 
   drawActor(p, state) {
-    // drawActor 直接吃世界坐标，主调度没有 translate 到版块起点；
-    // 不能再减版块偏移，否则尖笔会被画到镜头外。
+    // drawActor 直接吃世界坐标；笔尖从边界火种飞到第一格，
+    // 之后每格随笔的压印时间切换，笔与表格内容真正同因果。
     const t = q10(state.localT || 0);
+    const blockOrigin = ((state.blockIndex || 1) - 1) * 1000;
+    const first = cellCenter(0);
+    const cell = cellCenter(activeCellIndex(t));
+    const fly = smoothstep(0.06, 0.58, t);
     const spawn = 0.18 + 0.82 * smoothstep(0, 0.28, t);
-    drawStylus(p, state.x, t, spawn);
+
+    let x = state.x;
+    let baseY = ROAD_Y;
+    if (t < 0.58) {
+      x = state.x + (blockOrigin + first.x - state.x) * fly;
+      baseY = ROAD_Y + (first.y + 16 - ROAD_Y) * fly;
+    } else {
+      x = blockOrigin + cell.x;
+      baseY = cell.y + 16;
+    }
+    drawStylus(p, x, t, spawn, baseY);
   }
 };
