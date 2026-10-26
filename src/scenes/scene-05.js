@@ -227,7 +227,7 @@ function drawBenchBolt(p, x, y) {
 }
 
 function drawBenchShade(p) {
-  // 只在画面上下压一点暗角，左右留给全片镜头暗角，避免版块缝出现竖条。
+  // 只在画面上下压一点暗角，左右留给全片镜头的 5% 边缘衰减，避免版块缝出现竖条。
   const ctx = p.drawingContext;
   const grad = ctx.createLinearGradient(0, 150, 0, 850);
   grad.addColorStop(0, 'rgba(10,6,4,0.32)');

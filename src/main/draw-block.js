@@ -83,8 +83,8 @@ export function drawBlock(p, t, loc, width, height) {
   p.pop();
 
   // 全片共用的气氛层：纸尘/火星/扫描线/数据流，强度随笔段递增。
+  // 边缘衰减、bloom 与胶片颗粒在 index.js 的统一后处理里叠加。
   drawBlockFx(p, t, loc, width, height);
-  drawVignette(p, width, height);
 }
 
 function backdropColor(loc) {
@@ -93,23 +93,4 @@ function backdropColor(loc) {
     loc.blockIndex > 1 ? groupForBlock(loc.blockIndex - 1) : current;
   const k = smoothstep(0, 0.35, loc.localT);
   return mixHex(GROUPS[previous].bg, GROUPS[current].bg, k);
-}
-
-function drawVignette(p, width, height) {
-  const ctx = p.drawingContext;
-  const grad = ctx.createRadialGradient(
-    width / 2,
-    height / 2,
-    height * 0.34,
-    width / 2,
-    height / 2,
-    height * 0.78
-  );
-  grad.addColorStop(0, 'rgba(0,0,0,0)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.26)');
-  // 直接改 ctx.fillStyle 会绕过 p5 的填充缓存，必须 save/restore。
-  ctx.save();
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, width, height);
-  ctx.restore();
 }

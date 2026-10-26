@@ -7,6 +7,7 @@ import { smoothstep } from '../kit/rng.js';
 import { Clock } from '../kit/clock.js';
 import { createAudioEngine, encodeWav, renderAudioOffline } from '../audio/engine.js';
 import { SCENES } from '../scenes/index.js';
+import { drawGlobalPost } from '../kit/fx.js';
 import { drawBlock } from './draw-block.js';
 import { drawIntro } from './intro.js';
 import { drawOutro } from './outro.js';
@@ -19,6 +20,7 @@ const params = new URLSearchParams(window.location.search);
 const RENDER = params.get('render') === '1';
 const INITIAL_T = Number(params.get('t') || 0);
 const AUTOPLAY = params.get('autoplay') === '1';
+const POST = params.get('post') !== '0';
 const p5 = window.p5;
 
 if (!p5) throw new Error('p5 未加载：请通过 tools/serve.mjs 打开预览页');
@@ -136,6 +138,7 @@ new p5((p) => {
     // 封面在第 1 版强拍上向右平移，而不是硬切/闪白。
     if (t >= 5.0 && t < 5.72) {
       drawIntroToBlock(g, t);
+      if (POST) drawGlobalPost(g, t, loc, W, H);
       return;
     }
 
@@ -147,6 +150,7 @@ new p5((p) => {
     } else {
       drawOutro(g, t, snapshots);
     }
+    if (POST) drawGlobalPost(g, t, loc, W, H);
   }
 
   function drawIntroToBlock(g, t) {

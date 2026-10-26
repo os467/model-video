@@ -403,6 +403,9 @@ function drawFutureFx(p, t, index, W, H, power, accent, soft) {
   ctx.restore();
 }
 
+// 全片后处理（bloom / 5% 边缘衰减 / 胶片颗粒）也从 fx 层统一导出。
+export { drawGlobalPost } from './post.js';
+
 export function drawBlockFx(p, t, loc, W, H) {
   const index = clamp(Math.round(loc.blockIndex || 1), 1, 20);
   const group = groupForBlock(index);

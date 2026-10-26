@@ -358,6 +358,9 @@ function buildSfx(events) {
     addPerc(events, s15 + 2.62 + i * 0.06, 'tick', 0.02, i % 2 ? 0.2 : -0.2);
   }
 
+  const s16 = s(16);
+  addPerc(events, s16 + 2.4, 'tick', 0.02, 0);
+
   const s17 = s(17);
   addPerc(events, s17 + 2.0, 'knob', 0.04, -0.15);
   addPerc(events, s17 + 2.6, 'knob', 0.04, 0.15);
@@ -611,6 +614,64 @@ function buildOutro(events) {
   addNoise(events, 134.6, 1.8, 'room', 0.012, 0);
 }
 
+// 第 2 小节的高光/定格音效：这些点会轻微推高 SFX presence；
+// 只有持续较久的点才会触发音乐缓慢让路。
+const HIGHLIGHT_POINTS = [
+  [1, 2.54, 0.14],
+  [2, 2.62, 0.18],
+  [3, 3.0, 0.12],
+  [4, 2.94, 0.18],
+  [5, 2.32, 0.26],
+  [6, 2.4, 0.12],
+  [7, 2.7, 0.12],
+  [8, 2.0, 0.12],
+  [9, 2.78, 0.5],
+  [10, 2.8, 0.16],
+  [11, 2.78, 0.16],
+  [12, 2.9, 0.14],
+  [13, 2.72, 0.16],
+  [14, 2.9, 0.14],
+  [15, 2.8, 0.16],
+  [16, 2.4, 0.12],
+  [17, 2.6, 0.12],
+  [18, 2.5, 0.14]
+];
+
+const SFX_INSTS = new Set([
+  'perc',
+  'noise',
+  'modem',
+  'taperoll',
+  'radar',
+  'scope',
+  'activate',
+  'servo',
+  'gearroll',
+  'conveyor'
+]);
+const MUSIC_PERC = new Set(['timpani', 'pulse', 'hat']);
+
+function isSfxEvent(event) {
+  if (!SFX_INSTS.has(event.inst)) return false;
+  if (event.inst === 'perc' && MUSIC_PERC.has(event.kind)) return false;
+  return true;
+}
+
+function markHighlights(events) {
+  for (const [block, offset, hold] of HIGHLIGHT_POINTS) {
+    const target = BLOCKS_START + (block - 1) * BLOCK_DURATION + offset;
+    let best = null;
+    for (const event of events) {
+      if (Math.abs(event.t - target) > 0.025 || !isSfxEvent(event)) continue;
+      if (!best || (event.gain || 0) > (best.gain || 0)) best = event;
+    }
+    if (best) {
+      best.highlight = true;
+      best.highlightHold = hold;
+    }
+  }
+}
+
 export function buildScore() {
   const events = [];
   buildIntro(events);
@@ -620,6 +681,7 @@ export function buildScore() {
   buildClimax(events);
   buildLayers(events);
   buildOutro(events);
+  markHighlights(events);
   events.sort((a, b) => a.t - b.t || a.inst.localeCompare(b.inst));
   return { duration: TOTAL_DURATION, events };
 }

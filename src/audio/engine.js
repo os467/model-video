@@ -1,3 +1,4 @@
+import { BLOCK_DURATION, BLOCKS_START } from '../beat/timeline.js';
 import { mulberry32 } from '../kit/rng.js';
 import { buildScore } from './score.js';
 
@@ -5,7 +6,54 @@ import { buildScore } from './score.js';
 // 实时预览与离线导出共用同一套 Synth 和同一份 score 事件。
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
-const MASTER_GAIN = 0.95;
+// 整体总线预留 -3dB 余量，给 19 的全体合奏留出被限幅器推满的空间。
+const MASTER_GAIN = 0.95 * Math.pow(10, -3 / 20);
+const MUSIC_EASE_GAIN = Math.pow(10, -2.5 / 20);
+const SFX_PRESENCE_GAIN = 3.2;
+
+const MUSIC_PERC = new Set(['timpani', 'pulse', 'hat']);
+const SFX_INSTS = new Set([
+  'perc',
+  'noise',
+  'modem',
+  'taperoll',
+  'radar',
+  'scope',
+  'activate',
+  'servo',
+  'gearroll',
+  'conveyor'
+]);
+
+function isSfxEvent(event) {
+  if (!SFX_INSTS.has(event.inst)) return false;
+  if (event.inst === 'perc' && MUSIC_PERC.has(event.kind)) return false;
+  return true;
+}
+
+// 19 版块的音乐推进曲线：17 末开始蓄力，19 中后段把音乐总线推入限幅器。
+const CLIMAX_START = BLOCKS_START + 18 * BLOCK_DURATION;
+const CLIMAX_POINTS = [
+  [0, 1],
+  [CLIMAX_START - 2.4, 1],
+  [CLIMAX_START - 1.0, 1.14],
+  [CLIMAX_START + 1.0, 1.48],
+  [CLIMAX_START + 4.8, 1.7],
+  [CLIMAX_START + 6.0, 1]
+];
+
+function gainAt(points, t) {
+  if (t <= points[0][0]) return points[0][1];
+  for (let i = 1; i < points.length; i++) {
+    const [t1, v1] = points[i];
+    if (t <= t1) {
+      const [t0, v0] = points[i - 1];
+      const k = clamp((t - t0) / Math.max(0.0001, t1 - t0), 0, 1);
+      return v0 + (v1 - v0) * k;
+    }
+  }
+  return points[points.length - 1][1];
+}
 
 function makeNoiseBuffer(ctx, seconds = 2.4, seed = 0x51a7) {
   const len = Math.ceil(ctx.sampleRate * seconds);
@@ -67,12 +115,38 @@ class Synth {
     this.comp.connect(this.limiter);
     this.limiter.connect(ctx.destination);
 
+    // 音乐与物理音效分总线：高光时刻只轻推 SFX presence，必要时才让音乐缓慢让路。
+    this.musicEase = ctx.createGain();
+    this.musicEase.gain.value = 1;
+    this.musicDrive = ctx.createGain();
+    this.musicDrive.gain.value = 1;
+    this.musicBus = ctx.createGain();
+    this.musicBus.gain.value = 1;
+    this.sfxBus = ctx.createGain();
+    this.sfxBus.gain.value = 1;
+    this.sfxBody = ctx.createBiquadFilter();
+    this.sfxBody.type = 'peaking';
+    this.sfxBody.frequency.value = 300;
+    this.sfxBody.Q.value = 0.8;
+    this.sfxBody.gain.value = 0;
+    this.sfxPresence = ctx.createBiquadFilter();
+    this.sfxPresence.type = 'peaking';
+    this.sfxPresence.frequency.value = 1600;
+    this.sfxPresence.Q.value = 0.9;
+    this.sfxPresence.gain.value = 0;
+    this.musicBus.connect(this.musicEase);
+    this.musicEase.connect(this.musicDrive);
+    this.musicDrive.connect(this.master);
+    this.sfxBus.connect(this.sfxBody);
+    this.sfxBody.connect(this.sfxPresence);
+    this.sfxPresence.connect(this.master);
+
     this.reverb = ctx.createConvolver();
     this.reverb.buffer = makeImpulse(ctx);
     this.reverbGain = ctx.createGain();
     this.reverbGain.gain.value = 0.18;
     this.reverb.connect(this.reverbGain);
-    this.reverbGain.connect(this.master);
+    this.reverbGain.connect(this.musicEase);
 
     // 主旋律/琶音的附点八分延迟，给 13–20 的“数据感”留空间。
     this.delay = ctx.createDelay(1.2);
@@ -88,7 +162,7 @@ class Synth {
     this.delayFilter.connect(this.delayFeedback);
     this.delayFeedback.connect(this.delay);
     this.delayFilter.connect(this.delayGain);
-    this.delayGain.connect(this.master);
+    this.delayGain.connect(this.musicEase);
   }
 
   track(source) {
@@ -111,6 +185,7 @@ class Synth {
       }
     }
     this.sources.clear();
+    this.resetMusicEase();
   }
 
   setMuted(muted) {
@@ -119,12 +194,60 @@ class Synth {
     this.master.gain.setTargetAtTime(muted ? 0.0001 : MASTER_GAIN, now, 0.03);
   }
 
+  resetMusicEase() {
+    const now = this.ctx.currentTime;
+    const gain = this.musicEase.gain;
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(1, now);
+    for (const node of [this.sfxBody, this.sfxPresence]) {
+      node.gain.cancelScheduledValues(now);
+      node.gain.setValueAtTime(0, now);
+    }
+  }
+
+  // 只在较长的高光音效上轻轻让路：0.3s 下压 −2.5dB，结束后 0.5s 回升。
+  easeMusic(when, hold = 0.14) {
+    const at = Math.max(when, this.ctx.currentTime + 0.001);
+    const gain = this.musicEase.gain;
+    gain.cancelScheduledValues(at);
+    gain.linearRampToValueAtTime(MUSIC_EASE_GAIN, at + 0.3);
+    gain.setValueAtTime(MUSIC_EASE_GAIN, at + 0.3 + hold);
+    gain.linearRampToValueAtTime(1, at + 0.3 + hold + 0.5);
+  }
+
+  // 给物理音效的 body / presence 频段一点提升，让敲击/翻面/滴答自己站出来。
+  highlightSfx(when, hold = 0.14) {
+    const at = Math.max(when, this.ctx.currentTime + 0.001);
+    const settings = [
+      [this.sfxBody.gain, 1.8],
+      [this.sfxPresence.gain, SFX_PRESENCE_GAIN]
+    ];
+    for (const [param, amount] of settings) {
+      param.cancelScheduledValues(at);
+      param.linearRampToValueAtTime(amount, at + 0.06);
+      param.setValueAtTime(amount, at + 0.06 + hold);
+      param.linearRampToValueAtTime(0, at + 0.06 + hold + 0.3);
+    }
+  }
+
+  // 19 版块全体合奏的响度弧线；离线渲染也从 0 秒排同一条曲线。
+  scheduleClimax(t0, startCtx) {
+    const gain = this.musicDrive.gain;
+    const now = this.ctx.currentTime;
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(gainAt(CLIMAX_POINTS, t0), Math.max(now, startCtx));
+    for (const [time, value] of CLIMAX_POINTS) {
+      if (time <= t0 + 0.02) continue;
+      gain.linearRampToValueAtTime(value, startCtx + (time - t0));
+    }
+  }
+
   busFor(event) {
     const bus = this.ctx.createGain();
     const pan = this.ctx.createStereoPanner();
     pan.pan.value = clamp(event.pan || 0, -1, 1);
     bus.connect(pan);
-    pan.connect(this.master);
+    pan.connect(isSfxEvent(event) ? this.sfxBus : this.musicBus);
     const rev = this.ctx.createGain();
     const revAmount =
       event.reverb != null
@@ -166,6 +289,12 @@ class Synth {
   }
 
   play(event, when) {
+    if (event.highlight) {
+      const hold = event.highlightHold ?? 0.14;
+      this.highlightSfx(when, hold);
+      // 只给持续较久的高光让路，短促敲击交给 presence 提升。
+      if (hold >= 0.24) this.easeMusic(when, hold);
+    }
     const bus = this.busFor(event);
     const inst = event.inst;
     if (inst === 'pad' || inst === 'strings') {
@@ -1173,6 +1302,7 @@ export function createAudioEngine() {
     stopSources();
     startScore = clamp(t0, 0, score.duration);
     startCtx = ctx.currentTime + 0.05;
+    synth.scheduleClimax(startScore, startCtx);
     nextIndex = lowerBound(score.events, startScore);
     playing = true;
     schedule();
@@ -1229,6 +1359,7 @@ export async function renderAudioOffline(sampleRate = 44100) {
   if (!Ctx) throw new Error('当前浏览器不支持 OfflineAudioContext');
   const ctx = new Ctx(2, total, sampleRate);
   const synth = new Synth(ctx);
+  synth.scheduleClimax(0, 0);
   for (const event of score.events) synth.play(event, Math.max(0, event.t));
   return ctx.startRendering();
 }
