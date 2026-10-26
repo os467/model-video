@@ -1196,9 +1196,9 @@ export default {
   },
 
   drawActor(p, state) {
-    // drawActor 直接吃世界坐标；笔尖从边界火种飞到第一格，
-    // 之后每格随笔的压印时间切换，笔与表格内容真正同因果。
-    const t = q10(state.localT || 0);
+    // 场景内容仍按 10Hz 的泥板顿挫更新，但笔本身用原始 localT：
+    // 否则移向桌心、滑到接缝的连续动作会变成一跳一跳。
+    const t = clamp(state.localT || 0, 0, 6);
     const blockOrigin = ((state.blockIndex || 1) - 1) * 1000;
     const first = cellCenter(0);
     const cell = cellCenter(activeCellIndex(t));

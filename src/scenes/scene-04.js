@@ -772,8 +772,37 @@ function drawInkwell(p, t) {
   p.pop();
 }
 
+// 汉字数字：用同一套衬线字，加一点铁胆墨的洇边；比阿拉伯数字更贴这一版。
+const HAN_GLYPHS = ['一', '二', '三'];
+
+function drawHanGlyph(p, digit, q) {
+  const a = smoothstep(0, 0.55, q);
+  if (a <= 0.002) return;
+  const glyph = HAN_GLYPHS[digit - 1];
+  p.push();
+  p.translate(0, -36);
+  p.rotate(-0.012 + digit * 0.006);
+  p.noStroke();
+  p.textFont('serif');
+  p.textStyle(p.BOLD);
+  p.textAlign(p.CENTER, p.CENTER);
+  p.textSize(52);
+  fillHex(p, C.inkWarm, 0.12 * a);
+  p.text(glyph, 0.8, 0.6);
+  fillHex(p, C.ink, INK.burnt * a);
+  p.text(glyph, 0, 0);
+  p.pop();
+}
+
 function drawStepDigit(p, step, q) {
   if (q <= 0.001) return;
+  if (step.digit >= 1 && step.digit <= 3) {
+    p.push();
+    p.translate(step.x, step.baseY);
+    drawHanGlyph(p, step.digit, q);
+    p.pop();
+    return;
+  }
   const strokes = DIGIT_STROKES[step.digit];
   p.push();
   p.translate(step.x, step.baseY);

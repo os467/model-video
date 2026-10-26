@@ -6,6 +6,10 @@ const H = 1080;
 const SERIF = 'serif';
 const FRAME = { x: 1320, y: 190, w: 430, h: 340 };
 
+function clamp01(v) {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
 // Intro：纸张质感、素描插图、两条字幕；第二条落在 5.0 秒强拍前。
 export function drawIntro(p, t) {
   const paper = GROUPS.paper;
@@ -87,11 +91,11 @@ function drawPaper(p, paper, t) {
 function drawDust(p, paper, t) {
   p.push();
   p.noStroke();
-  for (let i = 0; i < 30; i++) {
-    const x = ((hash2(i, 21) * W + t * (4 + hash2(i, 22) * 8)) % W + W) % W;
-    const y = ((hash2(i, 23) * H - t * (2 + hash2(i, 24) * 4)) % H + H) % H;
-    const r = 0.5 + hash2(i, 25) * 1.4;
-    const a = 0.03 + hash2(i, 26) * 0.05;
+  for (let i = 0; i < 34; i++) {
+    const x = ((hash2(i, 21) * W + t * (6 + hash2(i, 22) * 12)) % W + W) % W;
+    const y = ((hash2(i, 23) * H - t * (3 + hash2(i, 24) * 6)) % H + H) % H;
+    const r = 0.5 + hash2(i, 25) * 1.5;
+    const a = 0.035 + hash2(i, 26) * 0.06;
     fillHex(p, i % 4 === 0 ? paper.accent : paper.soft, a);
     p.ellipse(x, y, r, r * 0.7);
   }
@@ -142,6 +146,26 @@ function drawPlate(p, paper, t) {
     p.line(cx, cy, cx, cy + 16 * sy);
   }
 
+  // 一道很慢的侧光扫过图版，避免封面中段完全静止。
+  const sweep = smoothstep(1.2, 2.0, t) * (1 - smoothstep(4.2, 4.8, t));
+  if (sweep > 0.002) {
+    const q = clamp01((t - 1.2) / 3.0);
+    const sx = x + 50 + (w - 100) * q;
+    const ctx = p.drawingContext;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x + 8, y + 8, w - 16, h - 16);
+    ctx.clip();
+    ctx.globalCompositeOperation = 'lighter';
+    const grad = ctx.createLinearGradient(sx - 90, 0, sx + 90, 0);
+    grad.addColorStop(0, 'rgba(255,245,220,0)');
+    grad.addColorStop(0.5, `rgba(255,248,228,${0.09 * sweep})`);
+    grad.addColorStop(1, 'rgba(255,245,220,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x + 8, y + 8, w - 16, h - 16);
+    ctx.restore();
+  }
+
   // 图版角标
   p.noStroke();
   fillHex(p, paper.ink, 0.35 * reveal);
@@ -180,16 +204,20 @@ function drawSigilSketch(p, paper, t) {
   const cx = FRAME.x + FRAME.w / 2;
   const cy = FRAME.y + FRAME.h * 0.56;
 
+  const ember = smoothstep(1.0, 1.75, t);
+  const pulse = 0.85 + 0.15 * Math.sin(t * 2.2);
+  const orbit = Math.sin(t * 0.16) * 0.018;
+
   p.push();
-  p.translate(cx, cy);
+  p.translate(cx, cy + Math.sin(t * 0.55) * 1.1);
   p.scale(1.5);
   p.noFill();
   p.strokeCap(p.ROUND);
 
   // 三条轨道：两条实线、一条点线，均不闭合。
-  sketchArc(p, 118, 74, -0.26, -2.55, 5.15, paper.ink, 0.22, 1.15, reveal);
-  sketchArc(p, 118, 74, -0.26, -2.55, 5.15, paper.accent, 0.05, 3.0, reveal);
-  sketchArc(p, 88, 56, 0.48, 0.35, 4.5, paper.ink, 0.17, 0.9, reveal);
+  sketchArc(p, 118, 74, -0.26 + orbit, -2.55, 5.15, paper.ink, 0.22, 1.15, reveal);
+  sketchArc(p, 118, 74, -0.26 + orbit, -2.55, 5.15, paper.accent, 0.05, 3.0, reveal);
+  sketchArc(p, 88, 56, 0.48 + orbit, 0.35, 4.5, paper.ink, 0.17, 0.9, reveal);
 
   // 点线轨道 + 几颗“被观测到的节点”。
   p.noStroke();
@@ -197,7 +225,7 @@ function drawSigilSketch(p, paper, t) {
     const a = (i / 32) * Math.PI * 2;
     const x = Math.cos(a) * 136;
     const y = Math.sin(a) * 84;
-    const rot = 0.08;
+    const rot = 0.08 + orbit;
     const px = x * Math.cos(rot) - y * Math.sin(rot);
     const py = x * Math.sin(rot) + y * Math.cos(rot);
     fillHex(p, paper.ink, 0.16 * reveal);
@@ -207,11 +235,18 @@ function drawSigilSketch(p, paper, t) {
     const a = (i / 8) * Math.PI * 2 + 0.28;
     const x = Math.cos(a) * 118;
     const y = Math.sin(a) * 74;
-    const rot = -0.26;
+    const rot = -0.26 + orbit;
     const px = x * Math.cos(rot) - y * Math.sin(rot);
     const py = x * Math.sin(rot) + y * Math.cos(rot);
     fillHex(p, i % 4 === 0 ? paper.accent : paper.ink, 0.24 * reveal);
     p.ellipse(px, py, 2.4, 2.4);
+  }
+
+  // 眼睛里一层很淡的暖色，和瞳心一起呼吸。
+  if (ember > 0.002) {
+    p.noStroke();
+    fillHex(p, paper.accent, 0.045 * ember * pulse);
+    p.ellipse(0, 4, 86, 42);
   }
 
   // 十字轴线与刻度，让它继续像一页旧图版。
@@ -277,13 +312,12 @@ function drawSigilSketch(p, paper, t) {
   }
 
   // 瞳心的暖色：整张图里唯一会让纸烧起来的地方。
-  const ember = smoothstep(1.0, 1.75, t);
   if (ember > 0.002) {
     p.noStroke();
-    fillHex(p, paper.accent, 0.13 * ember);
-    p.ellipse(0, 4, 48, 36);
-    fillHex(p, paper.accent, 0.62 * ember);
-    p.ellipse(0, 4, 13, 13);
+    fillHex(p, paper.accent, 0.13 * ember * pulse);
+    p.ellipse(0, 4, 48 * pulse, 36 * pulse);
+    fillHex(p, paper.accent, 0.62 * ember * pulse);
+    p.ellipse(0, 4, 13 * pulse, 13 * pulse);
     fillHex(p, '#d49a58', 0.82 * ember);
     p.ellipse(-1, 3, 7.5, 7.5);
     fillHex(p, '#f3d6a2', 0.9 * ember);

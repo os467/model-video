@@ -620,6 +620,104 @@ function drawCursorHistory(p, t) {
   p.pop();
 }
 
+// 蒸汽朋克压力表：铜管、阀门、表盘和一点点漏出的蒸汽。
+function drawSteampunkGauge(p, t) {
+  const x = 150;
+  const y = 700;
+  p.push();
+  p.noStroke();
+
+  // 表底阴影。
+  fillHex(p, '#0a0604', 0.42);
+  p.ellipse(x + 9, y + 34, 126, 26);
+
+  // 从滑尺下方伸出的铜管。
+  fillHex(p, C.brassDeep, 0.96);
+  p.rect(x - 10, 608, 20, 104, 4);
+  fillHex(p, C.brass, 0.92);
+  p.rect(x - 6, 610, 12, 99, 3);
+  fillHex(p, C.brassLight, 0.55);
+  p.rect(x - 4.5, 612, 2.2, 92, 1);
+  for (let i = 0; i < 4; i++) {
+    const ry = 624 + i * 20;
+    fillHex(p, C.brassDeep, 0.8);
+    p.ellipse(x, ry, 7, 3.4);
+    fillHex(p, C.brassLight, 0.35);
+    p.ellipse(x - 1.2, ry - 0.8, 2.2, 1.2);
+  }
+
+  // 阀门十字轮。
+  strokeHex(p, C.brassLight, 0.72);
+  p.strokeWeight(2.4);
+  p.line(x - 23, 602, x + 23, 602);
+  p.line(x, 581, x, 623);
+  fillHex(p, C.brassDeep, 0.9);
+  p.ellipse(x, 602, 11, 11);
+
+  // 表壳与表盘。
+  fillHex(p, C.brassDeep, 1);
+  p.ellipse(x, y, 118, 118);
+  fillHex(p, C.brassDark, 1);
+  p.ellipse(x, y, 108, 108);
+  fillHex(p, C.brass, 1);
+  p.ellipse(x, y, 96, 96);
+  fillHex(p, C.cream, 0.92);
+  p.ellipse(x, y, 80, 80);
+  fillHex(p, C.creamDim, 0.2);
+  p.ellipse(x, y, 80, 80);
+
+  // 刻度与红色危险区。
+  p.noFill();
+  strokeHex(p, C.ember, 0.5);
+  p.strokeWeight(2.4);
+  p.arc(x, y, 67, 67, -2.05, -1.25, p.OPEN);
+  for (let i = 0; i <= 20; i++) {
+    const a = -2.45 + (i / 20) * 4.9;
+    const r0 = i % 5 === 0 ? 31 : 35;
+    strokeHex(p, C.slot, i % 5 === 0 ? 0.72 : 0.42);
+    p.strokeWeight(i % 5 === 0 ? 1.6 : 1.0);
+    p.line(
+      x + Math.cos(a) * r0,
+      y + Math.sin(a) * r0,
+      x + Math.cos(a) * 39,
+      y + Math.sin(a) * 39
+    );
+  }
+
+  // 指针：随蒸汽压力轻微摆动。
+  const angle = -2.45 + (0.46 + 0.08 * Math.sin(t * 1.7 + 0.3)) * 4.9;
+  strokeHex(p, C.ember, 0.9);
+  p.strokeWeight(2.2);
+  p.line(x, y, x + Math.cos(angle) * 34, y + Math.sin(angle) * 34);
+  strokeHex(p, C.emberHot, 0.5);
+  p.strokeWeight(0.8);
+  p.line(x, y, x + Math.cos(angle) * 29, y + Math.sin(angle) * 29);
+  p.noStroke();
+  fillHex(p, C.brassDeep, 1);
+  p.ellipse(x, y, 11, 11);
+  fillHex(p, C.brassLight, 0.7);
+  p.ellipse(x - 2, y - 2, 4, 4);
+
+  // 玻璃反光。
+  p.noFill();
+  strokeHex(p, C.cream, 0.45);
+  p.strokeWeight(1.2);
+  p.arc(x, y, 72, 72, -2.15, -0.75, p.OPEN);
+  strokeHex(p, C.cream, 0.18);
+  p.strokeWeight(2.2);
+  p.arc(x, y, 84, 84, -1.9, -1.25, p.OPEN);
+
+  // 阀门漏出的蒸汽。
+  p.noStroke();
+  for (let i = 0; i < 3; i++) {
+    const age = (t * 0.45 + i * 0.33) % 1;
+    const a = (1 - age) * 0.12;
+    fillHex(p, C.steam, a);
+    p.ellipse(x + Math.sin(t * 0.8 + i) * 5, 592 - age * 28, 10 + age * 12, 6 + age * 8);
+  }
+  p.pop();
+}
+
 function drawSlideRule(p, t) {
   const overrun = cursorOverrun(t);
   const actorX = actorLocalX(t);
@@ -996,6 +1094,7 @@ export default {
     drawGearSteam(p, t);
     drawAbacus(p, t);
     drawSlideRule(p, t);
+    drawSteampunkGauge(p, t);
 
     // 夹爪在 draw 里画；两指跨过默认路带的部分交给 drawRoad 再补一次。
     const pose = gripperPose(t);

@@ -126,12 +126,12 @@ const TIP_KEYS = [
   { t: 3.34, x: 772, y: 610, rot: 0.000 },
   { t: 3.58, x: 790, y: 604, rot: 0.010 },
   { t: 3.82, x: 812, y: 610, rot: 0.020 },
-  { t: 4.00, x: 830, y: 606, rot: 0.020, scale: 1.0 },
-  { t: 4.20, x: 870, y: 604, rot: 0.020, scale: 0.98 },
-  { t: 4.60, x: 960, y: 602, rot: 0.010, scale: 0.84 },
-  { t: 5.10, x: 1090, y: 598, rot: 0.020, scale: 0.60 },
-  { t: 5.60, x: 1210, y: 606, rot: 0.020, scale: 0.36 },
-  { t: 6.00, x: 1294, y: 630, rot: 0.020, scale: 0.12 }
+  { t: 4.00, x: 830, y: 612, rot: 0.020, scale: 1.0 },
+  { t: 4.20, x: 870, y: 612, rot: 0.020, scale: 1.0 },
+  { t: 4.60, x: 960, y: 612, rot: 0.010, scale: 1.0 },
+  { t: 5.10, x: 1090, y: 612, rot: 0.020, scale: 1.0 },
+  { t: 5.60, x: 1210, y: 612, rot: 0.020, scale: 1.0 },
+  { t: 6.00, x: 1294, y: 612, rot: 0.020, scale: 1.0 }
 ];
 
 // 尖端关键帧整体套用同一工作区偏移，避免逐项漏改。
@@ -503,6 +503,68 @@ function flintPose(t) {
   };
 }
 
+// 收尾不再把石头缩小，而是让它沿骨面拉出一条横槽；
+// 槽里带火光和上浮火星，火种最终停在版块接缝。
+function drawFireTrail(p, pose, t) {
+  const reveal = smoothstep(3.95, 4.3, t);
+  if (reveal <= 0.002) return;
+  const x0 = 463;
+  const x1 = pose.tipX;
+  if (x1 <= x0 + 1) return;
+  const y = MARKS_BASE_Y;
+
+  p.push();
+  p.noStroke();
+
+  // 焦痕与暖光底。
+  fillHex(p, C.rust, 0.1 * reveal);
+  p.rect(x0, y - 5.4, x1 - x0, 10.8, 2);
+  fillHex(p, C.rust, 0.2 * reveal);
+  p.rect(x0, y - 2.6, x1 - x0, 5.2, 2);
+
+  // 槽线：暗芯、暖边、贴尖的高光。
+  strokeHex(p, C.ink, 0.5 * reveal);
+  p.strokeWeight(2.3);
+  p.line(x0, y, x1, y);
+  strokeHex(p, C.rust, 0.72 * reveal);
+  p.strokeWeight(1.2);
+  p.line(x0, y + 0.3, x1, y + 0.3);
+  strokeHex(p, C.rustLight, 0.42 * reveal);
+  p.strokeWeight(0.6);
+  p.line(x0, y - 0.6, x1, y - 0.6);
+  p.strokeCap(p.ROUND);
+  for (let k = 0; k < 7; k++) {
+    const q = k / 6;
+    const sx = x1 - (x1 - x0) * q * 0.16;
+    strokeHex(p, k % 2 ? C.rust : C.rustLight, (0.7 - q * 0.55) * reveal);
+    p.strokeWeight(1.1);
+    p.line(sx, y, sx + 2.8, y);
+  }
+
+  // 沿槽上浮的火星。
+  for (let i = 0; i < 16; i++) {
+    const q = hash2(i, 71, 9);
+    const sx = x0 + (x1 - x0) * (0.06 + q * 0.94);
+    const age = (t * 1.35 + i * 0.31) % 1;
+    const a = (1 - age) * 0.62 * reveal;
+    if (a <= 0.003) continue;
+    fillHex(p, i % 3 === 0 ? C.rustLight : C.boneLight, a);
+    p.ellipse(sx + Math.sin(t * 2.1 + i) * 1.8, y - 2.5 - age * 17, 1.4, 2.4);
+  }
+
+  // 槽头的火种：下一版块从这里接笔。
+  fillHex(p, C.rust, 0.26 * reveal);
+  p.ellipse(x1, y, 30, 16);
+  fillHex(p, C.rust, 0.62 * reveal);
+  p.ellipse(x1, y - 0.5, 8, 5.4);
+  fillHex(p, C.rustLight, 0.9 * reveal);
+  p.ellipse(x1 - 0.6, y - 1.2, 4, 3);
+  fillHex(p, C.boneLight, 0.8 * reveal);
+  p.ellipse(x1 - 0.9, y - 1.6, 1.6, 1.4);
+
+  p.pop();
+}
+
 function drawFlint(p, pose) {
   // 影子跟真实尖端走；接触时收紧，抬起时变大变淡。
   const lift = pose.lift;
@@ -662,7 +724,14 @@ export default {
     const pose = flintPose(t);
     p.push();
     p.translate(blockOrigin, 0);
+    drawFireTrail(p, pose, t);
+    // 石头不再缩小：走到接缝前淡出，火光留在原地完成交接。
+    const fade = 1 - smoothstep(5.2, 5.7, t);
+    const ctx = p.drawingContext;
+    ctx.save();
+    ctx.globalAlpha = fade;
     drawFlint(p, pose);
+    ctx.restore();
     p.pop();
   }
 };

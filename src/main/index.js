@@ -26,7 +26,6 @@ new p5((p) => {
   let clock;
   let snapshots;
   let transA = null;
-  let transB = null;
   let ui = null;
   let lastHud = '';
 
@@ -37,11 +36,9 @@ new p5((p) => {
     p.pixelDensity(1);
     p.frameRate(60);
 
-    // 封面→第 1 版的横向平移用两张离屏画布，避免逐帧分配。
+    // 封面→第 1 版：只预渲染封面最后一帧，平移时盖在实时第 1 版上。
     transA = p.createGraphics(W, H);
     transA.pixelDensity(1);
-    transB = p.createGraphics(W, H);
-    transB.pixelDensity(1);
 
     document.body.classList.toggle('render', RENDER);
 
@@ -50,6 +47,7 @@ new p5((p) => {
     if (!RENDER && AUTOPLAY) clock.play();
 
     await document.fonts.ready;
+    drawIntro(transA, 5.0);
     snapshots = makeSnapshots(p);
 
     window.__seek = async (time) => {
@@ -110,12 +108,10 @@ new p5((p) => {
 
   function drawIntroToBlock(g, t) {
     const k = smoothstep(5.0, 5.72, t);
-    drawIntro(transA, 5.0);
-    drawBlock(transB, t, locate(t), W, H);
-
+    // 第 1 版照常实时渲染；封面最后一帧像一页纸一样从右侧滑走。
     g.background(0);
+    drawBlock(g, t, locate(t), W, H);
     g.image(transA, -W * k, 0);
-    g.image(transB, W * (1 - k), 0);
 
     // 两页纸之间的接缝用一层暖纸色渐变压住，避免亮白竖条。
     const seam = W * (1 - k);

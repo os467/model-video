@@ -1,5 +1,5 @@
 import { GROUPS, groupForBlock, fillHex, strokeHex } from './palette.js';
-import { clamp, hash2 } from './rng.js';
+import { clamp, hash2, smoothstep } from './rng.js';
 
 // 全片共用的“气氛层”：纸尘、黄铜火星、示波器扫描、数据流、故障带。
 // 所有元素都由 hash2 和 t 决定，不读随机数；强度随笔段递增，
@@ -280,6 +280,99 @@ function drawDataFx(p, t, index, W, H, power, accent, soft) {
   }
 }
 
+// 3/6/7 的背景公式：屏幕空间慢速漂移，低对比，像从纸/图纸里浮出来。
+const GHOSTS = {
+  3: [
+    'π', '√2', 'a²+b²=c²', 'Δ', 'Σ', 'φ', 'θ', '≈', '3.14159', '1/2',
+    'x²', '∠', '√3', 'x+y', 'πr²', '∠A', 'Δx', '∞', '2πr'
+  ],
+  6: [
+    'Δ²', 'n²', '10³', 'Σn', 'log', 'c₁', 'c₂', 'x−y', '+1', '1822',
+    'B·A', 'θ', 'Δx', 'x²', 'Σx²', 'dx', 'n!', 'cog'
+  ],
+  7: [
+    'A∧B', 'A∨B', '¬A', 'A→B', 'A⊕B', '0', '1', 'p∧q', 'A·A=A',
+    '0∨1=1', '¬0=1', '(A∧B)∨C', 'A∨0=A', '1∧A=A', '¬¬A=A'
+  ]
+};
+
+// 第 3 版给几个固定锚点，保证左右下缘一定有公式浮现。
+const GHOST_ANCHORS = {
+  3: [
+    [110, 220], [880, 200], [120, 600], [930, 650], [280, 740],
+    [700, 740], [980, 420], [180, 520], [880, 520], [420, 170],
+    [760, 190], [110, 400], [960, 300], [300, 600], [620, 140],
+    [850, 780]
+  ]
+};
+
+function drawFormulaGhosts(p, t, index, W, H, color, power) {
+  const items = GHOSTS[index];
+  if (!items) return;
+  const anchors = GHOST_ANCHORS[index];
+  p.push();
+  p.noStroke();
+  p.textAlign(p.CENTER, p.CENTER);
+  p.textFont(index === 3 ? 'serif' : 'monospace');
+  for (let i = 0; i < items.length; i++) {
+    const seed = index * 503 + i;
+    const reveal = smoothstep(0.35 + i * 0.12, 1.2 + i * 0.12, t);
+    if (reveal <= 0.002) continue;
+    const anchor = anchors && i < anchors.length ? anchors[i] : null;
+    const x =
+      (anchor ? anchor[0] : 70 + hash2(i, 1, seed) * (W - 140)) - t * 9;
+    const y =
+      (anchor
+        ? anchor[1]
+        : 100 + hash2(i, 2, seed) * (H - 200)) +
+      Math.sin(t * 0.28 + i * 1.4) * 4;
+    const a = (index === 3 ? 0.09 : 0.13) * reveal + 0.04 * power * reveal;
+    p.push();
+    p.translate(x, y);
+    p.rotate((hash2(i, 3, seed) - 0.5) * 0.22);
+    p.textSize(12 + hash2(i, 4, seed) * 17);
+    fillHex(p, color, a);
+    p.text(items[i], 0, 0);
+    p.pop();
+  }
+  p.pop();
+}
+
+// 17–19 的 0/1 垂直数据雨：每列一次 text，避免逐字符绘制。
+function drawBinaryRain(p, t, index, W, H, accent, power) {
+  const cols = 10 + (index - 17) * 3;
+  const size = 14 + (index - 17) * 2;
+  const lineH = size * 1.3;
+  const charCount = 14;
+  const colH = lineH * charCount;
+
+  p.push();
+  p.noStroke();
+  p.textFont('monospace');
+  p.textSize(size);
+  p.textLeading(lineH);
+  p.textAlign(p.CENTER, p.TOP);
+
+  for (let i = 0; i < cols; i++) {
+    const seed = index * 601 + i;
+    const x = 44 + hash2(i, 1, seed) * (W - 88);
+    const speed = 26 + hash2(i, 2, seed) * 52;
+    const start =
+      (hash2(i, 3, seed) * (H + colH) + t * speed) % (H + colH);
+    let s = '';
+    for (let j = 0; j < charCount; j++) {
+      s += (hash2(i, j, seed + 9) > 0.5 ? '1' : '0');
+      if (j < charCount - 1) s += '\n';
+    }
+    const a =
+      (0.075 + 0.1 * power) * (0.45 + 0.55 * hash2(i, 4, seed));
+    fillHex(p, i % 5 === 0 ? '#e2feff' : accent, a);
+    p.text(s, x, start - colH);
+    p.text(s, x, start);
+  }
+  p.pop();
+}
+
 function drawFutureFx(p, t, index, W, H, power, accent, soft) {
   // 20 的专用气氛：星尘 + 一条很轻的中心横向光晕。
   p.push();
@@ -329,5 +422,15 @@ export function drawBlockFx(p, t, loc, W, H) {
     drawElectronicFx(p, lt, index, W, H, power, accent, soft);
   } else {
     drawDataFx(p, lt, index, W, H, power, accent, soft);
+  }
+
+  if (GHOSTS[index]) {
+    const ghostColor =
+      index === 3 ? '#6f6558' : index === 6 ? '#9db4a9' : '#8fc7b4';
+    drawFormulaGhosts(p, lt, index, W, H, ghostColor, power);
+  }
+
+  if (index >= 17) {
+    drawBinaryRain(p, lt, index, W, H, accent, power);
   }
 }
