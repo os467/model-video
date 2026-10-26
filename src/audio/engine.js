@@ -144,7 +144,8 @@ class Synth {
       event.inst === 'impact' ||
       event.inst === 'riser' ||
       event.inst === 'drone' ||
-      event.inst === 'gearroll'
+      event.inst === 'gearroll' ||
+      event.inst === 'conveyor'
     ) {
       echoAmount = 0;
     }
@@ -190,6 +191,8 @@ class Synth {
       this.drone(event, when, bus);
     } else if (inst === 'gearroll') {
       this.gearroll(event, when, bus);
+    } else if (inst === 'conveyor') {
+      this.conveyor(event, when, bus);
     } else {
       this.lead(event, when, bus);
     }
@@ -620,8 +623,10 @@ class Synth {
         this.noiseBurst(bus, when + 0.012, 0.05, gain * 0.45, 'bandpass', 500, 1.2, 0.003);
         break;
       case 'bead':
-        this.sineAt(bus, when, 1180, 0.035, gain, 'sine', 2600);
-        this.sineAt(bus, when + 0.015, 1620, 0.025, gain * 0.6, 'sine', 3000);
+        // 木/黄铜算珠：低通咔哒 + 低闷芯，不要高频电子音。
+        this.noiseBurst(bus, when, 0.035, gain, 'lowpass', 900, 0.7, 0.002);
+        this.sineAt(bus, when, 240, 0.04, gain * 0.72, 'sine', 620);
+        this.sineAt(bus, when + 0.012, 330, 0.03, gain * 0.35, 'sine', 820);
         break;
       case 'knob':
         this.noiseBurst(bus, when, 0.03, gain, 'highpass', 2600, 0.7, 0.001);
@@ -765,22 +770,35 @@ class Synth {
   servo(event, when, bus) {
     const ctx = this.ctx;
     const dur = event.dur || 0.4;
+    const gain = event.gain;
+
+    // 低齿轮电机：不要尖的电子 whine。
     const osc = ctx.createOscillator();
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(260, when);
-    osc.frequency.exponentialRampToValueAtTime(170, when + dur);
+    osc.frequency.setValueAtTime(155, when);
+    osc.frequency.exponentialRampToValueAtTime(105, when + dur);
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = 950;
+    filter.frequency.value = 520;
+    filter.Q.value = 0.8;
     const envGain = ctx.createGain();
-    env(envGain.gain, when, 0.02, dur, 0.06, event.gain);
+    env(envGain.gain, when, 0.03, dur, 0.07, gain * 0.75);
     osc.connect(filter);
     filter.connect(envGain);
     envGain.connect(bus);
     this.track(osc);
     osc.start(when);
     osc.stop(when + dur + 0.12);
-    this.sineAt(bus, when, 1150, dur * 0.8, event.gain * 0.16, 'sine', 2400);
+
+    // 导轨摩擦层。
+    this.noiseBurst(bus, when, dur, gain * 0.32, 'bandpass', 900, 0.8, 0.04);
+
+    // 棘轮一格一格咬合。
+    for (let k = 0; k < 4; k++) {
+      const t = when + dur * (0.12 + k * 0.2);
+      this.noiseBurst(bus, t, 0.025, gain * 0.22, 'bandpass', 1500, 1.1, 0.001);
+      this.sineAt(bus, t, 92, 0.04, gain * 0.12, 'sine', 260);
+    }
   }
 
   riser(event, when, bus) {
@@ -896,6 +914,61 @@ class Synth {
     this.track(hum);
     hum.start(when);
     hum.stop(when + dur + 0.2);
+  }
+
+  conveyor(event, when, bus) {
+    const ctx = this.ctx;
+    const dur = event.dur;
+    const gain = event.gain;
+    const rate = event.rate || 3.4;
+
+    // 皮带：低通噪声被慢方波斩成一段一段的“带面”摩擦。
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    src.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = 520;
+    band.Q.value = 0.7;
+    const amp = ctx.createGain();
+    const base = gain * 0.55;
+    amp.gain.setValueAtTime(0.0001, when);
+    amp.gain.linearRampToValueAtTime(base, when + 0.35);
+    amp.gain.setValueAtTime(base, when + Math.max(0.4, dur - 0.2));
+    amp.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    const lfo = ctx.createOscillator();
+    lfo.type = 'square';
+    lfo.frequency.value = rate;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = gain * 0.4;
+    lfo.connect(lfoGain);
+    lfoGain.connect(amp.gain);
+    src.connect(band);
+    band.connect(amp);
+    amp.connect(bus);
+    for (const node of [src, lfo]) {
+      this.track(node);
+      node.start(when);
+      node.stop(when + dur + 0.05);
+    }
+
+    // 电机：两条很低的锯齿，几乎只留一点转动的底噪。
+    for (const [freq, level] of [[54, 0.22], [81, 0.12]]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 170;
+      const envGain = ctx.createGain();
+      env(envGain.gain, when, 0.35, dur, 0.2, gain * level);
+      osc.connect(filter);
+      filter.connect(envGain);
+      envGain.connect(bus);
+      this.track(osc);
+      osc.start(when);
+      osc.stop(when + dur + 0.25);
+    }
   }
 }
 

@@ -304,6 +304,7 @@ function buildSfx(events) {
   for (const t of [1.0, 2.0, 3.0, 4.0, 5.0]) addPerc(events, s8 + t, 'stylus', 0.03, 0);
 
   const s9 = s(9);
+  events.push({ t: s9, dur: 6, inst: 'conveyor', gain: 0.012, rate: 3.2, pan: 0 });
   for (const t of [2.35, 2.5, 2.65, 2.8]) {
     events.push({ t: s9 + t, dur: 0.25, inst: 'scope', gain: 0.035, pan: 0.1 });
   }
