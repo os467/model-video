@@ -374,7 +374,8 @@ function buildAtmosphere(events) {
     [s(13) - 0.7, 0.7, 0.055],
     [s(15) - 0.7, 0.7, 0.06],
     [s(17) - 0.7, 0.7, 0.06],
-    [s(19) - 0.7, 0.7, 0.065],
+    [s(18) - 0.7, 0.7, 0.062],
+    [s(19) - 0.7, 0.7, 0.07],
     [s(20) - 0.7, 0.7, 0.07]
   ];
   for (const [t, dur, gain] of risers) {
@@ -412,6 +413,87 @@ function buildAtmosphere(events) {
   }
 }
 
+// 16→19 的连续爬升：16 保持原编排，17/18/19 逐段加低频、
+// 加铜管/弦乐、加琶音与高频 sparkle，19 到全片最高点。
+function buildClimax(events) {
+  const s = (i) => BLOCKS_START + (i - 1) * BLOCK_DURATION;
+
+  // 15→16 的桥：一个持续高音 + 16 的 riser，避免断崖。
+  addNote(events, s(16) - 0.85, 1.7, 'shimmer', 86, 0.034, 0);
+  events.push({ t: s(16) - 0.65, dur: 0.65, inst: 'riser', gain: 0.052, pan: 0 });
+
+  // 17：推理模型。钢琴主题下加低八度锯齿与每拍低频，开始变厚。
+  const s17 = s(17);
+  for (const n of THEME) {
+    const t = s17 + n.b * BEAT;
+    const dur = n.d * BEAT;
+    addNote(events, t, dur, 'sawlead', n.n - 12, 0.052, -0.15);
+    addNote(events, t + 0.22, 0.25, 'bell', n.n + 12, 0.022, 0.1);
+  }
+  for (let b = 0; b < 12; b++) {
+    const bar = Math.floor(b / 4);
+    addNote(events, s17 + b * BEAT, 0.3, 'bass', BASS[bar], 0.045, 0);
+  }
+  for (let bar = 0; bar < 3; bar++) {
+    addChord(events, s17 + bar * BAR, 1.7, 'pad', CHORDS[bar], 0.028, 0, { kind: 'synth' });
+  }
+
+  // 18：工具与调试。铜管短和弦、低八度主题、更密的琶音。
+  const s18 = s(18);
+  for (const n of THEME) {
+    const t = s18 + n.b * BEAT;
+    const dur = n.d * BEAT;
+    addNote(events, t, dur, 'sawlead', n.n - 12, 0.06, 0.15);
+  }
+  for (let b = 0; b < 12; b++) {
+    const bar = Math.floor(b / 4);
+    addNote(events, s18 + b * BEAT, 0.3, 'bass', BASS[bar], 0.052, 0);
+  }
+  for (let bar = 0; bar < 3; bar++) {
+    addChord(events, s18 + bar * BAR, 0.62, 'pad', CHORDS[bar], 0.038, 0, { kind: 'brass' });
+    for (let k = 0; k < 8; k++) {
+      addNote(
+        events,
+        s18 + bar * BAR + k * 0.25,
+        0.16,
+        'arp',
+        CHORDS[bar][k % 3] + 24,
+        0.017,
+        k % 2 ? 0.22 : -0.22
+      );
+    }
+  }
+
+  // 19：真实世界，全片最高点。原主题升八度、弦乐铺满、16 分琶音和每拍低频。
+  const s19 = s(19);
+  for (const n of THEME) {
+    const t = s19 + n.b * BEAT;
+    const dur = n.d * BEAT;
+    addNote(events, t, dur, 'sawlead', n.n + 12, 0.085, -0.08);
+    addNote(events, t, dur, 'shimmer', n.n + 24, 0.026, 0.2);
+  }
+  for (let b = 0; b < 12; b++) {
+    const bar = Math.floor(b / 4);
+    addNote(events, s19 + b * BEAT, 0.28, 'bass', BASS[bar], 0.062, 0);
+    addPerc(events, s19 + b * BEAT + 0.25, 'hat', 0.022, 0.2);
+  }
+  for (let bar = 0; bar < 3; bar++) {
+    addChord(events, s19 + bar * BAR, 1.7, 'strings', CHORDS[bar], 0.048, 0, { kind: 'warm' });
+    for (let k = 0; k < 16; k++) {
+      addNote(
+        events,
+        s19 + bar * BAR + k * 0.125,
+        0.1,
+        'arp',
+        CHORDS[bar][k % 3] + 24,
+        0.019,
+        k % 2 ? 0.24 : -0.24
+      );
+    }
+  }
+  addImpact(events, s19 + 2.9, 0.12);
+}
+
 function buildOutro(events) {
   const start = 125;
   addImpact(events, start, 0.18);
@@ -444,6 +526,7 @@ export function buildScore() {
   for (let i = 1; i <= BLOCK_COUNT; i++) buildBlock(events, i);
   buildSfx(events);
   buildAtmosphere(events);
+  buildClimax(events);
   buildOutro(events);
   events.sort((a, b) => a.t - b.t || a.inst.localeCompare(b.inst));
   return { duration: TOTAL_DURATION, events };
