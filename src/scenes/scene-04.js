@@ -3,8 +3,8 @@ import { clamp, hash2, smoothstep } from '../kit/rng.js';
 import { drawTitleCard } from '../kit/text.js';
 
 // 第 4 版块：羊皮纸、铁胆墨步骤与 split-nib 芦苇笔。
-// 本版块是静态优先：重点保证 localT≈1.0（标题与蘸墨）和 localT≈3.0
-// （纸螺旋已展开、algorithm 已写出、笔尖停在收笔点）。
+// 本版块是静态优先：重点保证 localT≈1.0（左侧纸带被逐笔写出）和
+// localT≈3.0（纸螺旋已展开、“算法”印落下、笔尖停在收笔点）。
 const META = {
   id: 4,
   cn: '算法一词的诞生',
@@ -24,6 +24,9 @@ const C = {
   inkWarm: '#4c3827',
   gold: '#b0853f',
   goldLight: '#d3ae68',
+  seal: '#963a2a',
+  sealDark: '#6f2418',
+  graphite: '#6f6558',
   reed: '#a77645',
   reedLight: '#d0a36c',
   reedDark: '#5f412a',
@@ -42,7 +45,7 @@ const INK = {
 
 const ROAD_TOP = 470;
 const ROAD_BOTTOM = 530;
-const WORD = { text: 'algorithm', x: 932, y: 702, size: 48 };
+const SEAL = { x: 894, y: 674, size: 70 };
 const STAMP = { x: 936, y: 716 };
 const PEN_LENGTH = 214;
 
@@ -52,8 +55,8 @@ const STEPS = [
     x: 646,
     baseY: 503,
     markY: 497,
-    revealA: 1.32,
-    revealB: 1.62,
+    revealA: 1.42,
+    revealB: 1.72,
     seed: 401
   },
   {
@@ -61,8 +64,8 @@ const STEPS = [
     x: 646,
     baseY: 578,
     markY: 572,
-    revealA: 1.66,
-    revealB: 1.98,
+    revealA: 1.76,
+    revealB: 2.06,
     seed: 402
   },
   {
@@ -70,46 +73,47 @@ const STEPS = [
     x: 646,
     baseY: 653,
     markY: 647,
-    revealA: 2.0,
-    revealB: 2.32,
+    revealA: 2.1,
+    revealB: 2.4,
     seed: 403
   }
 ];
 
+// 笔尖的局部绝对坐标：从版块接缝左侧连续进入，先写左侧纸带，
+// 再写右侧 1/2/3，沿回环收笔，最后落到“算法”印上。
 const PEN_X_KEYS = [
-  [0.0, 292],
-  [0.35, 300],
-  [0.95, 312],
-  [1.15, 317],
-  [1.4, 422],
-  [1.6, 426],
-  [1.8, 432],
-  [2.0, 440],
-  [2.2, 446],
-  [2.4, 470],
-  [2.55, 458],
-  [2.7, 451],
-  [2.85, 443],
-  [2.95, 436]
+  [0.0, -20],
+  [0.35, 70],
+  [0.6, 150],
+  [0.9, 270],
+  [1.15, 390],
+  [1.26, 468],
+  [1.45, 646],
+  [1.8, 646],
+  [2.15, 646],
+  [2.26, 776],
+  [2.4, 898],
+  [2.55, 850],
+  [2.64, 779],
+  [2.9, STAMP.x],
+  [3.0, STAMP.x]
 ];
 
 const PEN_Y_KEYS = [
-  [0.0, 610],
+  [0.0, 612],
   [0.35, 642],
-  [0.9, 649],
-  [1.15, 649],
-  [1.3, 566],
-  [1.45, 502],
-  [1.6, 502],
-  [1.72, 575],
-  [1.92, 575],
-  [2.04, 648],
-  [2.22, 648],
-  [2.38, 594],
-  [2.5, 508],
-  [2.65, 476],
-  [2.78, 548],
-  [2.92, 700],
+  [0.6, 648],
+  [0.9, 648],
+  [1.15, 648],
+  [1.26, 648],
+  [1.45, 503],
+  [1.8, 578],
+  [2.15, 653],
+  [2.26, 647],
+  [2.4, 576],
+  [2.55, 482],
+  [2.64, 493],
+  [2.9, STAMP.y],
   [3.0, STAMP.y]
 ];
 
@@ -133,18 +137,24 @@ const PEN_ANGLE_KEYS = [
   [6.0, 0.6]
 ];
 
+// 收笔后向右滑到版块接缝：笔尖最终停在下一版算珠的坐标 (1000,602)，
+// 让第 4 版的火种直接交接给第 5 版的算珠。
 const PEN_EXIT_X_KEYS = [
-  [4.0, STAMP.x - 4000 / 6],
-  [4.45, 332],
-  [5.0, 280],
-  [6.0, 140]
+  [4.0, STAMP.x],
+  [4.25, 960],
+  [4.6, 990],
+  [5.0, 1010],
+  [5.6, 1005],
+  [6.0, 1000]
 ];
 
 const PEN_EXIT_Y_KEYS = [
   [4.0, STAMP.y],
-  [4.35, 662],
-  [5.0, 610],
-  [6.0, 580]
+  [4.25, 690],
+  [4.6, 650],
+  [5.0, 620],
+  [5.6, 605],
+  [6.0, 602]
 ];
 
 function buildCubic(segments, steps = 12) {
@@ -739,7 +749,7 @@ function drawInkwell(p, t) {
   p.strokeWeight(0.8);
   p.line(x - 24, y + 8, x - 21, y + 24);
 
-  const dip = smoothstep(0.58, 0.78, t) * (1 - smoothstep(1.12, 1.36, t));
+  const dip = smoothstep(1.12, 1.3, t) * (1 - smoothstep(1.45, 1.65, t));
   if (dip > 0.002) {
     p.noFill();
     strokeHex(p, C.goldLight, 0.42 * dip);
@@ -861,32 +871,221 @@ function drawStepColumn(p, t) {
   drawLoopKnot(p, t);
 }
 
-function drawAlgorithm(p, t) {
-  const reveal = smoothstep(2.72, 2.9, t);
-  if (reveal <= 0.002) return;
+// 左侧纸带：把“算法”拆成 起 → 分 → 环 三个动作，笔从左缘连续写过去。
+const LEFT_NODES = [
+  { x: 150, y: 640, label: '起', t0: 0.52 },
+  { x: 270, y: 640, label: '分', t0: 0.82 },
+  { x: 390, y: 640, label: '环', t0: 1.12 }
+];
+
+function drawLeftNode(p, index, a) {
+  if (a <= 0.002) return;
   p.push();
+  p.translate(LEFT_NODES[index].x, LEFT_NODES[index].y);
+  p.scale(0.9 + 0.35 * a);
+  p.noFill();
+  strokeHex(p, C.ink, 0.62 * a);
+  p.strokeWeight(1.5);
+
+  if (index === 0) {
+    p.ellipse(0, 0, 13, 13);
+    p.noStroke();
+    fillHex(p, C.ink, 0.76 * a);
+    p.ellipse(0, 0, 4.2, 4.2);
+    strokeHex(p, C.inkWarm, 0.4 * a);
+    p.strokeWeight(1.1);
+    p.line(-7, -12, -7, -18);
+    p.line(0, -13, 0, -21);
+    p.line(7, -12, 7, -18);
+  } else if (index === 1) {
+    p.beginShape();
+    p.vertex(0, -7);
+    p.vertex(7, 0);
+    p.vertex(0, 7);
+    p.vertex(-7, 0);
+    p.endShape(p.CLOSE);
+    p.line(-7, 0, -18, -8);
+    p.line(7, 0, 18, -8);
+    p.noStroke();
+    fillHex(p, C.ink, 0.55 * a);
+    p.ellipse(-18, -8, 2.4, 2.4);
+    p.ellipse(18, -8, 2.4, 2.4);
+  } else {
+    p.arc(0, 0, 17, 17, -0.4, Math.PI * 1.55, p.OPEN);
+    p.push();
+    p.translate(-4, -7);
+    p.rotate(-2.5);
+    p.noStroke();
+    fillHex(p, C.ink, 0.62 * a);
+    p.triangle(0, 0, -5, -2.4, -5, 2.4);
+    p.pop();
+    strokeHex(p, C.seal, 0.58 * a);
+    p.strokeWeight(1.4);
+    p.line(10, -2, 13, 2);
+    p.line(13, 2, 18, -5);
+  }
+  p.pop();
+}
+
+function drawLeftScroll(p, t) {
+  // 上一版块的石墨线在接缝处淡出，让笔从同一条纸面进入。
+  const carry = 1 - smoothstep(0.5, 1.4, t);
+  if (carry > 0.002) {
+    p.push();
+    p.noFill();
+    strokeHex(p, C.graphite, 0.16 * carry);
+    p.strokeWeight(1.1);
+    p.arc(8, 606, 158, 158, -1.2, 0.35, p.OPEN);
+    p.line(0, 552, 84, 552);
+    strokeHex(p, C.graphite, 0.09 * carry);
+    p.strokeWeight(0.8);
+    p.line(0, 560, 52, 560);
+    p.pop();
+  }
+
+  const band = smoothstep(0.12, 0.5, t);
+  if (band > 0.002) {
+    p.push();
+    p.noStroke();
+    fillHex(p, C.paperLight, 0.32 * band);
+    p.beginShape();
+    p.vertex(62, 612);
+    p.vertex(95, 606);
+    p.vertex(130, 610);
+    p.vertex(170, 603);
+    p.vertex(215, 608);
+    p.vertex(260, 602);
+    p.vertex(310, 607);
+    p.vertex(355, 601);
+    p.vertex(400, 606);
+    p.vertex(432, 602);
+    p.vertex(447, 612);
+    p.vertex(439, 682);
+    p.vertex(400, 687);
+    p.vertex(350, 681);
+    p.vertex(300, 687);
+    p.vertex(250, 682);
+    p.vertex(200, 688);
+    p.vertex(150, 683);
+    p.vertex(100, 688);
+    p.vertex(64, 684);
+    p.endShape(p.CLOSE);
+
+    strokeHex(p, C.paperPale, 0.3 * band);
+    p.strokeWeight(1.1);
+    p.line(95, 607, 430, 603);
+    strokeHex(p, C.paperDark, 0.3 * band);
+    p.strokeWeight(1.3);
+    p.line(66, 685, 438, 683);
+    strokeHex(p, C.paperDark, 0.14 * band);
+    p.strokeWeight(3.2);
+    p.line(70, 690, 434, 688);
+
+    p.strokeCap(p.ROUND);
+    for (let i = 0; i < 20; i++) {
+      const x = 70 + hash2(i, 201) * 350;
+      const y = 610 + hash2(i, 202) * 68;
+      strokeHex(p, C.paperShade, 0.1 * band);
+      p.strokeWeight(0.7);
+      p.line(x, y, x + 2 + hash2(i, 203) * 5, y + (hash2(i, 204) - 0.5) * 2);
+    }
+    p.pop();
+  }
+
+  const link = smoothstep(0.4, 1.3, t);
+  if (link > 0.002) {
+    p.push();
+    p.noFill();
+    strokeHex(p, C.ink, 0.45 * link);
+    p.strokeWeight(1.25);
+    p.beginShape();
+    for (let i = 0; i <= 48; i++) {
+      const q = i / 48;
+      p.vertex(118 + q * 300, 640 + Math.sin(q * Math.PI * 3.2) * 0.8);
+    }
+    p.endShape();
+    if (link > 0.5) {
+      drawArrowHead(p, 213, 640, 0, 5, 211, 0.42 * link);
+      drawArrowHead(p, 333, 640, 0, 5, 212, 0.42 * link);
+    }
+    p.pop();
+  }
+
+  for (let i = 0; i < LEFT_NODES.length; i++) {
+    const node = LEFT_NODES[i];
+    const a = smoothstep(node.t0, node.t0 + 0.24, t);
+    drawLeftNode(p, i, a);
+    if (a > 0.002) {
+      p.push();
+      p.noStroke();
+      fillHex(p, C.inkWarm, 0.5 * a);
+      p.textFont('serif');
+      p.textSize(11);
+      p.textAlign(p.CENTER, p.TOP);
+      p.text(node.label, node.x, node.y + 22);
+      p.pop();
+    }
+  }
+
+  const notes = smoothstep(0.35, 0.9, t);
+  if (notes > 0.002) {
+    p.push();
+    for (let i = 0; i < 5; i++) {
+      const x = 112 + i * 16;
+      strokeHex(p, C.graphite, 0.24 * notes);
+      p.strokeWeight(0.9);
+      p.line(x, 614 + (i % 2) * 2, x + 1.5, 626 + (i % 2) * 2);
+    }
+    p.noStroke();
+    fillHex(p, C.seal, 0.4 * notes);
+    p.rect(424, 664, 12, 12, 1);
+    p.noFill();
+    strokeHex(p, C.sealDark, 0.34 * notes);
+    p.strokeWeight(0.8);
+    p.rect(427, 667, 6, 6, 1);
+    p.pop();
+  }
+}
+
+function drawAlgorithmSeal(p, t) {
+  const reveal = smoothstep(2.84, 2.98, t);
+  if (reveal <= 0.002) return;
+  const s = 0.86 + 0.14 * reveal;
+  const h = SEAL.size * 0.5;
+  p.push();
+  p.translate(SEAL.x, SEAL.y);
+  p.rotate(-0.045);
+  p.scale(s);
+
   p.noStroke();
+  fillHex(p, C.seal, 0.06 * reveal);
+  p.ellipse(0, 0, SEAL.size * 1.3, SEAL.size * 1.18);
+  fillHex(p, C.seal, 0.9 * reveal);
+  p.rect(-h, -h, SEAL.size, SEAL.size, 2);
+
+  p.noFill();
+  strokeHex(p, C.sealDark, 0.9 * reveal);
+  p.strokeWeight(2.4);
+  p.rect(-h, -h, SEAL.size, SEAL.size, 2);
+  strokeHex(p, C.paperPale, 0.28 * reveal);
+  p.strokeWeight(1);
+  p.rect(-h + 4.5, -h + 4.5, SEAL.size - 9, SEAL.size - 9, 1);
+
+  p.noStroke();
+  fillHex(p, C.paperPale, 0.94 * reveal);
   p.textFont('serif');
   p.textStyle(p.BOLD);
-  // 右对齐让收笔点固定，笔尖总能落在单词末端。
-  p.textAlign(p.RIGHT, p.CENTER);
-  p.textSize(WORD.size);
+  p.textAlign(p.CENTER, p.CENTER);
+  p.textSize(24);
+  p.text('算', 0, -13);
+  p.text('法', 0, 13);
 
-  // 两层极淡的偏移字就是铁胆墨的洇边，不用大半径 blur。
-  fillHex(p, C.inkWarm, reveal * 0.11);
-  p.text(WORD.text, WORD.x - 1.1, WORD.y + 0.8);
-  fillHex(p, C.ink, reveal * 0.08);
-  p.text(WORD.text, WORD.x + 1.0, WORD.y - 0.6);
-  fillHex(p, C.ink, reveal * INK.burnt);
-  p.text(WORD.text, WORD.x, WORD.y);
-
-  const tap = smoothstep(2.86, 2.98, t);
-  if (tap > 0.002) {
-    fillHex(p, C.ink, 0.82 * tap);
-    p.ellipse(STAMP.x, STAMP.y, 4.6, 3.0);
-    fillHex(p, C.gold, 0.18 * tap);
-    p.ellipse(STAMP.x - 8, STAMP.y - 2.5, 1.8, 1.1);
-  }
+  // 干笔飞白：几道印色细线压过印面。
+  strokeHex(p, C.sealDark, 0.4 * reveal);
+  p.strokeWeight(1.1);
+  p.line(-h + 9, -h + 13, -h + 20, -h + 13);
+  p.line(h - 20, h - 15, h - 9, h - 16);
+  p.line(-h + 8, h - 22, -h + 15, h - 22);
   p.pop();
 }
 
@@ -961,9 +1160,10 @@ function drawArtwork(p, t, bandOnly = false) {
   drawGuideRules(p);
   drawOrnaments(p);
   drawPaperSpiral(p, t);
+  drawLeftScroll(p, t);
   drawInkwell(p, t);
   drawStepColumn(p, t);
-  drawAlgorithm(p, t);
+  drawAlgorithmSeal(p, t);
   drawCornerCurl(p, t);
 }
 
@@ -1136,14 +1336,13 @@ function penPose(state) {
   const rawT = clamp(state.localT || 0, 0, 6);
   // drawActor 收到原始 localT，动作在这里自行压到 10Hz。
   const t = Math.floor(rawT * 10) / 10;
-  const blockIndex = state.blockIndex || 1;
-  const localX = state.x - (blockIndex - 1) * 1000;
 
   let nibX;
   let nibY;
   let angle;
   if (t < 2.95) {
-    nibX = localX + track(t, PEN_X_KEYS);
+    // 局部绝对坐标：从接缝左侧进入，连续写完整张纸。
+    nibX = track(t, PEN_X_KEYS);
     nibY = track(t, PEN_Y_KEYS);
     angle = track(t, PEN_ANGLE_KEYS);
   } else if (t <= 4.0) {
@@ -1152,11 +1351,11 @@ function penPose(state) {
     nibY = STAMP.y;
     angle = 0.18;
   } else {
-    nibX = localX + track(t, PEN_EXIT_X_KEYS);
+    nibX = track(t, PEN_EXIT_X_KEYS);
     nibY = track(t, PEN_EXIT_Y_KEYS);
     angle = track(t, PEN_ANGLE_KEYS);
   }
-  return { t, nibX, nibY, angle, localX };
+  return { t, nibX, nibY, angle };
 }
 
 export default {

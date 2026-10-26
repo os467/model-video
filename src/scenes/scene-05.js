@@ -2,8 +2,8 @@ import { fillHex, strokeHex } from '../kit/palette.js';
 import { clamp, hash2, mulberry32, smoothstep } from '../kit/rng.js';
 import { drawTitleCard } from '../kit/text.js';
 
-// 05 机械计算：深木工作台 + 黄铜计算尺 + 算盘/齿轮 + 剪影手。
-// 静态重点：localT≈1.0（标题/滑尺/齿轮）与 localT≈3.0（0 形算盘、竖大拇指、蒸汽）。
+// 05 机械计算：深木工作台 + 黄铜计算尺 + 算盘/齿轮 + 黄铜两指夹爪。
+// 静态重点：localT≈1.0（标题/滑尺/齿轮）与 localT≈3.0（0 形算盘、夹爪夹住游标、蒸汽）。
 const TAU = Math.PI * 2;
 
 // 标题卡只属于当前版块，避免镜头提前看到下一段时带出下一段标题。
@@ -27,8 +27,6 @@ const C = {
   ember: '#c96a2c',
   emberHot: '#f0a052',
   emberCore: '#ffe0a0',
-  hand: '#16100b',
-  handRim: '#3a2817',
   woodBead: '#4b311c',
   woodBeadDark: '#28190f',
   slot: '#170f09',
@@ -691,78 +689,127 @@ function drawSlideRule(p, t) {
   }
 }
 
-// ---------- 手 ----------
+// ---------- 黄铜两指平行夹爪 ----------
 
-function handPose(t) {
+// 夹爪：第二小节从上方降下，夹住游标后随珠子一起向右推，
+// 松开后沿滑杆退回。指缝宽度由 close 控制，保持两指平行。
+function gripperPose(t) {
   const hold = Math.min(t, 3);
-  // 手在第 2 小节才进入，别让标题帧就顶着一只大手。
   const presence = smoothstep(1.65, 2.0, hold);
   const push1 = smoothstep(2.06, 2.17, hold) * (1 - smoothstep(2.28, 2.44, hold));
-  const push2 = smoothstep(2.56, 2.67, hold) * (1 - smoothstep(2.84, 2.97, hold));
+  // 夹爪保持夹持到 3s 高光之后再松开；hold 在 3s 冻结，
+  // 所以 3–4s 定格时仍然咬着游标。
+  const push2 = smoothstep(2.56, 2.67, hold) * (1 - smoothstep(3.65, 4.15, hold));
   const push = push2;
-  const thumb = smoothstep(2.8, 2.98, hold);
   const actorX = actorLocalX(hold);
   const restX = Math.max(actorX + 110, 530);
-  const pushX = Math.max(actorX + 40, 480);
-  const handX = restX + (pushX - restX) * push;
-  const palmY = 350 + push * 38 - (1 - presence) * 170 - smoothstep(4.15, 4.85, t) * 280;
-  return { presence, push, thumb, handX, palmY, push1, push2 };
+  // 夹爪中心对准游标实际位置，随游标一起移动。
+  const cursorX = actorX + 34 + 36 * cursorOverrun(hold);
+  const targetX = Math.max(cursorX, 462);
+  const gripX = restX + (targetX - restX) * push;
+  const exit = smoothstep(4.15, 4.85, t);
+  const gripY = 350 + push * 38 - (1 - presence) * 170 - exit * 320;
+  const open = smoothstep(4.15, 4.85, t);
+  const close = smoothstep(1.95, 2.2, hold);
+  const gap = 26 + 56 * (1 - close) + 28 * open;
+  const alpha = presence * (1 - smoothstep(4.7, 5.1, t));
+  return { presence, push, push1, push2, gripX, gripY, gap, alpha };
 }
 
-function drawHandShapes(p, pose, includeFinger, color, grow, ox, oy) {
-  const x = pose.handX + ox;
-  const y = pose.palmY + oy;
-  p.strokeCap(p.ROUND);
-  p.stroke(color);
+function drawGripper(p, pose, onlyFingers) {
+  if (pose.alpha < 0.015) return;
+  const x = pose.gripX;
+  const y = pose.gripY;
+  const a = pose.alpha;
+  const top = y + 26;
+  const len = 205;
+  const fx = pose.gap * 0.5 + 9;
 
-  // 前臂从画面上方伸入
-  p.strokeWeight(92 + grow);
-  p.line(x + 52, 96, x + 30, y - 30);
+  if (!onlyFingers) {
+    p.push();
+    p.noStroke();
 
-  // 拇指：竖起或收拢
-  const thx = x - 68 - 24 * pose.thumb;
-  const thy = y + 34 - 139 * pose.thumb;
-  p.strokeWeight(40 + grow);
-  p.line(x - 38, y + 8, thx, thy);
+    // 顶部滑杆：外筒 + 内杆 + 三道黄铜箍。
+    const rodH = Math.max(8, y - 130);
+    fillHex(p, C.brassDeep, 0.96 * a);
+    p.rect(x - 16, 96, 32, rodH + 34, 6);
+    fillHex(p, C.brassDark, 0.96 * a);
+    p.rect(x - 12, 98, 24, rodH + 28, 5);
+    fillHex(p, C.brassLight, 0.42 * a);
+    p.rect(x - 9, 100, 3, rodH + 22, 2);
+    for (let k = 0; k < 3; k++) {
+      const cy = 130 + k * Math.max(26, rodH * 0.32);
+      if (cy > y - 44) break;
+      fillHex(p, C.brassDeep, 0.9 * a);
+      p.rect(x - 19, cy, 38, 9, 2);
+      fillHex(p, C.brassLight, 0.38 * a);
+      p.rect(x - 19, cy, 38, 2, 1);
+    }
 
-  // 食指：推游标时向下伸出
-  if (includeFinger) {
-    const tipY = y + 34 + 176 * pose.push;
-    p.strokeWeight(33 + grow);
-    p.line(x - 6, y + 12, x - 12, tipY);
+    // 夹爪座：倒角黄铜块，正面有深色滑槽和一枚暖光指示灯。
+    fillHex(p, '#0a0604', 0.35 * a);
+    p.rect(x - 55 + 4, y - 32 + 5, 110, 64, 7);
+    fillHex(p, C.brassDeep, 0.98 * a);
+    p.rect(x - 55, y - 33, 110, 66, 7);
+    fillHex(p, C.brassDark, 0.98 * a);
+    p.rect(x - 51, y - 29, 102, 58, 5);
+    fillHex(p, C.brass, 0.98 * a);
+    p.rect(x - 47, y - 25, 94, 46, 4);
+    fillHex(p, C.brassLight, 0.5 * a);
+    p.rect(x - 47, y - 25, 94, 2.6, 1.5);
+    fillHex(p, C.brassDeep, 0.55 * a);
+    p.rect(x - 47, y + 17, 94, 4, 1.5);
+    fillHex(p, C.slot, 0.82 * a);
+    p.rect(x - 32, y + 4, 64, 9, 2);
+    fillHex(p, C.cream, 0.14 * a);
+    p.rect(x - 30, y + 6, 46, 1.2, 1);
+
+    // 指示灯
+    fillHex(p, C.ember, 0.82 * a);
+    p.ellipse(x + 39, y - 14, 5.2, 5.2);
+    fillHex(p, C.emberCore, 0.72 * a);
+    p.ellipse(x + 39, y - 14, 2.1, 2.1);
+
+    // 四颗沉头螺钉
+    for (const sx of [-42, 42]) {
+      for (const sy of [-17, 17]) {
+        fillHex(p, C.brassDeep, 0.9 * a);
+        p.ellipse(x + sx, y + sy, 6.4, 6.4);
+        fillHex(p, C.brassLight, 0.38 * a);
+        p.ellipse(x + sx - 1, y + sy - 1, 2.6, 2.6);
+      }
+    }
+
+    // 与滑杆的腕关节
+    fillHex(p, C.brassDeep, 0.98 * a);
+    p.ellipse(x, y - 35, 30, 13);
+    fillHex(p, C.brassLight, 0.45 * a);
+    p.ellipse(x - 3, y - 38, 12, 4.5);
+    p.pop();
   }
 
-  // 手掌
-  p.noStroke();
-  fillHex(p, color, 1);
-  p.ellipse(x, y, 150 + grow, 140 + grow);
-
-  // 握拳的四个指节
-  for (let k = 0; k < 4; k++) {
-    const kx = x - 57 + k * 28;
-    const ky = y + 47 + (k === 0 ? -6 : k === 3 ? 4 : 0);
-    p.ellipse(kx, ky, 42 + grow, 40 + grow);
-  }
-}
-
-function drawHand(p, t, includeFinger) {
-  const pose = handPose(t);
-  if (pose.presence < 0.015) return;
+  // 两指：平行下伸，内侧贴深色防滑垫。
   p.push();
-  // 暖棕色轮廓偏移，再用深色剪影盖住左上，形成 1px 暖边
-  drawHandShapes(p, pose, includeFinger, C.handRim, 7, 3, 5);
-  drawHandShapes(p, pose, includeFinger, C.hand, 0, 0, 0);
-  p.pop();
-}
+  for (const s of [-1, 1]) {
+    const fx0 = x + s * fx;
+    p.noStroke();
+    fillHex(p, C.brassDeep, 0.98 * a);
+    p.rect(fx0 - 9, top, 18, len, 3);
+    fillHex(p, C.brass, 0.98 * a);
+    p.rect(fx0 - 6.5, top + 2, 13, len - 4, 2.5);
+    fillHex(p, C.brassLight, 0.55 * a);
+    p.rect(fx0 - 6, top + 4, 2.4, len - 10, 1);
+    fillHex(p, C.brassDeep, 0.7 * a);
+    p.rect(fx0 - 7, top + len - 14, 14, 3, 1);
 
-// 食指单独补画：drawRoad 盖掉默认路带后，只恢复跨带的那根指头。
-function drawIndexFingerShapes(p, pose, color, grow, ox, oy) {
-  const x = pose.handX + ox;
-  const y = pose.palmY + oy;
-  p.strokeCap(p.ROUND);
-  p.stroke(color);
-  p.strokeWeight(33 + grow);
-  p.line(x - 6, y + 12, x - 12, y + 34 + 176 * pose.push);
+    // 内侧防滑垫（朝夹爪中心）
+    fillHex(p, C.oil, 0.9 * a);
+    p.rect(fx0 - s * 5 - 2.5, top + len - 44, 5, 32, 1);
+    strokeHex(p, C.brassLight, 0.3 * a);
+    p.strokeWeight(0.8);
+    p.line(fx0 - s * 6, top + len - 38, fx0 - s * 6, top + len - 18);
+  }
+  p.pop();
 }
 
 // ---------- 主角：算盘珠 ----------
@@ -950,9 +997,9 @@ export default {
     drawAbacus(p, t);
     drawSlideRule(p, t);
 
-    // 手在 draw 里画；推游标的食指若跨过默认路带，交给 drawRoad 再补一次。
-    const pose = handPose(t);
-    drawHand(p, t, pose.push <= 0.02);
+    // 夹爪在 draw 里画；两指跨过默认路带的部分交给 drawRoad 再补一次。
+    const pose = gripperPose(t);
+    drawGripper(p, pose, false);
 
     drawBenchShade(p);
 
@@ -988,12 +1035,18 @@ export default {
 
     drawRoadBandGrain(p);
 
-    // 食指只在推游标时跨过这条带；这里只补画指头，避免手体重叠标题卡。
-    const pose = handPose(t);
-    if (pose.push > 0.02 && pose.presence > 0.015) {
+    // 两指会跨过这条带；只把带内被盖掉的一小段补回来，
+    // 避免把夹爪上半身重画到标题卡上。
+    const pose = gripperPose(t);
+    if (pose.alpha > 0.015) {
+      const ctx = p.drawingContext;
       p.push();
-      drawIndexFingerShapes(p, pose, C.handRim, 7, 3, 5);
-      drawIndexFingerShapes(p, pose, C.hand, 0, 0, 0);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 470, 1000, 60);
+      ctx.clip();
+      drawGripper(p, pose, true);
+      ctx.restore();
       p.pop();
     }
 

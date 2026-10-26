@@ -45,7 +45,6 @@ const CHAIN_R = 195;
 const CHAIN_NODE_R = [5.0, 4.6, 5.4, 4.8, 6.3];
 
 // 卡在圆边的小方块。圆心 (700,402)、半径 174 时，120° 处约 (613,552.7)。
-const SQUARE = { x: 610, y: 558, size: 18, rot: 0.3 };
 
 function polar(cx, cy, r, deg) {
   const a = (deg * Math.PI) / 180;
@@ -351,53 +350,25 @@ function drawSpiral(p, t) {
   p.pop();
 }
 
-function drawStuckSquare(p, t) {
-  const s = smoothstep(2.66, 2.92, t);
-  if (s <= 0.002) return;
-  const h = SQUARE.size * 0.5;
-  p.push();
-  p.translate(SQUARE.x, SQUARE.y);
-  p.rotate(SQUARE.rot + 0.55 * (1 - s));
-  p.scale(s);
-
-  p.noStroke();
-  fillHex(p, C.ink, 0.13);
-  p.rect(-h + 2.4, -h + 3.2, SQUARE.size, SQUARE.size, 1);
-  fillHex(p, C.rust, 0.09);
-  p.ellipse(0, 0, SQUARE.size * 2.1, SQUARE.size * 2.1);
-
-  fillHex(p, '#6e4a22', 0.96);
-  strokeHex(p, C.ink, 0.85);
-  p.strokeWeight(1.4);
-  p.rect(-h, -h, SQUARE.size, SQUARE.size, 1);
-
-  strokeHex(p, C.brassHi, 0.65);
-  p.strokeWeight(1.0);
-  p.line(-h + 1, -h + 1, h - 2, -h + 1);
-  p.line(-h + 1, -h + 1, -h + 1, h - 2);
-  p.pop();
-}
-
-function drawTapMarks(p, t) {
-  const a = smoothstep(2.86, 3.0, t) * (1 - smoothstep(3.9, 4.4, t));
-  if (a <= 0.002) return;
-  p.push();
-  p.noFill();
-  strokeHex(p, C.graphite, 0.16 * a);
-  p.strokeWeight(1.0);
-  p.arc(610, 558, 22, 22, Math.PI * 1.08, Math.PI * 1.58, p.OPEN);
-  p.arc(610, 558, 30, 30, Math.PI * 1.14, Math.PI * 1.52, p.OPEN);
-  p.pop();
-}
-
 function drawConstruction(p, t) {
+  // 2D 假透视：把构造面纵向压到 0.86，并垫一层偏移阴影，
+  // 不切 WEBGL，保留现有 2D 管线。
+  p.push();
+  p.translate(0, 500);
+  p.scale(1, 0.86);
+  p.translate(0, -500);
+  p.noStroke();
+  fillHex(p, C.ink, 0.045);
+  p.ellipse(CX + 16, CY + 24, R * 2.15, R * 1.8);
+
   const appear = smoothstep(0.0, 0.5, t);
-  const circleP = smoothstep(0.65, 2.05, t);
-  const triP = smoothstep(1.1, 2.25, t);
-  const parP = smoothstep(1.4, 2.45, t);
-  const auxP = smoothstep(1.25, 2.35, t);
-  const dashP = smoothstep(1.45, 2.55, t);
-  const chainP = smoothstep(1.6, 2.7, t);
+  // 圆规走到圆边（≈2.5s）前后才把主线画完，20.0s 高光时正好闭圆。
+  const circleP = smoothstep(0.9, 3.0, t);
+  const triP = smoothstep(1.7, 2.9, t);
+  const parP = smoothstep(2.2, 3.2, t);
+  const auxP = smoothstep(2.1, 3.1, t);
+  const dashP = smoothstep(2.4, 3.4, t);
+  const chainP = smoothstep(2.7, 3.6, t);
 
   const tri = [
     polar(CX, CY, R, -90),
@@ -493,8 +464,7 @@ function drawConstruction(p, t) {
 
   drawProofChain(p, chainP);
   drawSpiral(p, t);
-  drawStuckSquare(p, t);
-  drawTapMarks(p, t);
+  p.pop();
 }
 
 // 圆规进场时留下的两段“第一弧”，中心在铜尺上，纯构造痕迹。
@@ -717,6 +687,12 @@ function drawCompass(p, localT, x) {
     y: hy + Math.sin(movingAngle) * len
   };
 
+  // 换点时抬脚：脚离开纸面 10–14，再落回；让“换点”读成动作。
+  const lift =
+    12 * smoothstep(1.62, 1.8, poseT) * (1 - smoothstep(1.98, 2.14, poseT)) +
+    9 * smoothstep(2.06, 2.22, poseT) * (1 - smoothstep(2.38, 2.56, poseT));
+  footM.y -= lift;
+
   // 接触阴影。
   p.push();
   p.noStroke();
@@ -731,6 +707,30 @@ function drawCompass(p, localT, x) {
 
   drawLeg(p, H, footF, 2.0, true);
   drawLeg(p, H, footM, -2.5, false);
+
+  // 笔尖落点：脚放下时在纸面留一个很小的石墨接触点。
+  if (t < 3.0 && lift < 0.6) {
+    p.push();
+    p.noStroke();
+    fillHex(p, C.ink, 0.34);
+    p.ellipse(footM.x, footM.y + 1.2, 3.2, 2.2);
+    p.pop();
+  }
+
+  // 闭圆时的一下轻敲：两圈很淡的石墨涟漪。
+  const tapRing = smoothstep(2.86, 2.96, t) * (1 - smoothstep(3.0, 3.35, t));
+  if (tapRing > 0.002) {
+    p.push();
+    p.noFill();
+    strokeHex(p, C.graphite, 0.22 * tapRing);
+    p.strokeWeight(0.9);
+    p.arc(footM.x, footM.y, 26, 19, -0.25, Math.PI * 1.22, p.OPEN);
+    strokeHex(p, C.graphite, 0.13 * tapRing);
+    p.strokeWeight(0.8);
+    p.arc(footM.x, footM.y, 40, 29, -0.2, Math.PI * 1.28, p.OPEN);
+    p.pop();
+  }
+
   drawHinge(p, hx, hy);
 }
 
@@ -798,6 +798,7 @@ export default {
   drawActor(p, state) {
     // drawActor 直接吃世界坐标，主调度没有 translate 到版块起点；
     // 不能把 state.x 再减版块偏移，否则主角会被画到镜头外。
+    // 构造面压扁成纵深，圆规是立在纸前的实体工具，不再跟着压扁。
     drawCompass(p, state.localT, state.x);
   }
 };
