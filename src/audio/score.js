@@ -499,7 +499,7 @@ function buildLayers(events) {
 
   // 13 起：低音弦乐铺底，随阶段缓慢加厚。
   for (let i = 13; i <= 19; i++) {
-    const gain = 0.012 + (i - 13) * 0.0018;
+    const gain = 0.022 + (i - 13) * 0.0025;
     for (let bar = 0; bar < 3; bar++) {
       addChord(
         events,
@@ -513,26 +513,31 @@ function buildLayers(events) {
       );
     }
   }
+  addChord(events, s(13) + 0.15, 0.9, 'strings', [CHORDS[0][0] - 12, CHORDS[0][2] - 12], 0.035, -0.2, {
+    kind: 'warm'
+  });
 
   // 14 起：高音玻璃/钟，一小节一颗。
   for (let i = 14; i <= 19; i++) {
-    const gain = 0.009 + (i - 14) * 0.0015;
+    const gain = 0.018 + (i - 14) * 0.002;
     for (let bar = 0; bar < 3; bar++) {
       addNote(events, s(i) + bar * BAR, 1.4, 'glass', CHORDS[bar][2] + 24, gain, 0.2);
     }
   }
+  addNote(events, s(14) + 0.18, 0.9, 'glass', CHORDS[0][2] + 24, 0.04, 0.2);
 
   // 15 起：铜管短和弦。
   for (let i = 15; i <= 19; i++) {
-    const gain = 0.018 + (i - 15) * 0.0025;
+    const gain = 0.03 + (i - 15) * 0.003;
     for (let bar = 0; bar < 3; bar++) {
       addChord(events, s(i) + bar * BAR, 0.55, 'brass', CHORDS[bar], gain, 0);
     }
   }
+  addChord(events, s(15) + 0.16, 0.7, 'brass', CHORDS[0], 0.05, 0);
 
   // 16 起：高弦长音。
   for (let i = 16; i <= 19; i++) {
-    const gain = 0.012 + (i - 16) * 0.002;
+    const gain = 0.022 + (i - 16) * 0.0025;
     for (let bar = 0; bar < 3; bar++) {
       addChord(
         events,
@@ -545,22 +550,25 @@ function buildLayers(events) {
       );
     }
   }
+  addChord(events, s(16) + 0.16, 1.0, 'highstrings', CHORDS[0].map((n) => n + 12), 0.04, 0.15);
 
   // 17 起：大提琴低音线。
   for (let i = 17; i <= 19; i++) {
-    const gain = 0.014 + (i - 17) * 0.002;
+    const gain = 0.022 + (i - 17) * 0.002;
     for (let bar = 0; bar < 3; bar++) {
       addNote(events, s(i) + bar * BAR, 1.8, 'cello', BASS[bar], gain, -0.1);
     }
   }
+  addNote(events, s(17) + 0.16, 1.0, 'cello', BASS[0], 0.04, -0.1);
 
   // 18 起：定音鼓，每小节一记。
   for (let i = 18; i <= 19; i++) {
-    const gain = 0.03 + (i - 18) * 0.012;
+    const gain = 0.05 + (i - 18) * 0.012;
     for (let bar = 0; bar < 3; bar++) {
       addPerc(events, s(i) + bar * BAR, 'timpani', gain, 0);
     }
   }
+  addPerc(events, s(18) + 0.16, 'timpani', 0.08, 0);
 
   // 19：唱诗班进来，全体合奏到顶。
   for (let bar = 0; bar < 3; bar++) {
@@ -570,10 +578,11 @@ function buildLayers(events) {
       1.7,
       'choir',
       [CHORDS[bar][0] + 12, CHORDS[bar][2] + 12],
-      0.028,
+      0.05,
       0
     );
   }
+  addChord(events, s(19) + 0.1, 1.2, 'choir', [CHORDS[0][0] + 12, CHORDS[0][2] + 12], 0.06, 0);
 }
 
 function buildOutro(events) {

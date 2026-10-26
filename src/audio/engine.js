@@ -57,8 +57,15 @@ class Synth {
     this.comp.ratio.value = 3;
     this.comp.attack.value = 0.004;
     this.comp.release.value = 0.24;
+    this.limiter = ctx.createDynamicsCompressor();
+    this.limiter.threshold.value = -2;
+    this.limiter.knee.value = 0;
+    this.limiter.ratio.value = 20;
+    this.limiter.attack.value = 0.002;
+    this.limiter.release.value = 0.06;
     this.master.connect(this.comp);
-    this.comp.connect(ctx.destination);
+    this.comp.connect(this.limiter);
+    this.limiter.connect(ctx.destination);
 
     this.reverb = ctx.createConvolver();
     this.reverb.buffer = makeImpulse(ctx);
