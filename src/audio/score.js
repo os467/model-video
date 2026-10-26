@@ -450,7 +450,6 @@ function buildClimax(events) {
     addNote(events, s18 + b * BEAT, 0.3, 'bass', BASS[bar], 0.052, 0);
   }
   for (let bar = 0; bar < 3; bar++) {
-    addChord(events, s18 + bar * BAR, 0.62, 'pad', CHORDS[bar], 0.038, 0, { kind: 'brass' });
     for (let k = 0; k < 8; k++) {
       addNote(
         events,
@@ -478,7 +477,6 @@ function buildClimax(events) {
     addPerc(events, s19 + b * BEAT + 0.25, 'hat', 0.022, 0.2);
   }
   for (let bar = 0; bar < 3; bar++) {
-    addChord(events, s19 + bar * BAR, 1.7, 'strings', CHORDS[bar], 0.048, 0, { kind: 'warm' });
     for (let k = 0; k < 16; k++) {
       addNote(
         events,
@@ -492,6 +490,90 @@ function buildClimax(events) {
     }
   }
   addImpact(events, s19 + 2.9, 0.12);
+}
+
+// 乐器层累积：13 低弦进场，之后每进一个阶段加一件，19 全体合奏。
+// 主旋律不变；新层只做和声、低音、节奏和高音点缀。
+function buildLayers(events) {
+  const s = (i) => BLOCKS_START + (i - 1) * BLOCK_DURATION;
+
+  // 13 起：低音弦乐铺底，随阶段缓慢加厚。
+  for (let i = 13; i <= 19; i++) {
+    const gain = 0.012 + (i - 13) * 0.0018;
+    for (let bar = 0; bar < 3; bar++) {
+      addChord(
+        events,
+        s(i) + bar * BAR,
+        1.8,
+        'strings',
+        [CHORDS[bar][0] - 12, CHORDS[bar][2] - 12],
+        gain,
+        -0.15,
+        { kind: 'warm' }
+      );
+    }
+  }
+
+  // 14 起：高音玻璃/钟，一小节一颗。
+  for (let i = 14; i <= 19; i++) {
+    const gain = 0.009 + (i - 14) * 0.0015;
+    for (let bar = 0; bar < 3; bar++) {
+      addNote(events, s(i) + bar * BAR, 1.4, 'glass', CHORDS[bar][2] + 24, gain, 0.2);
+    }
+  }
+
+  // 15 起：铜管短和弦。
+  for (let i = 15; i <= 19; i++) {
+    const gain = 0.018 + (i - 15) * 0.0025;
+    for (let bar = 0; bar < 3; bar++) {
+      addChord(events, s(i) + bar * BAR, 0.55, 'brass', CHORDS[bar], gain, 0);
+    }
+  }
+
+  // 16 起：高弦长音。
+  for (let i = 16; i <= 19; i++) {
+    const gain = 0.012 + (i - 16) * 0.002;
+    for (let bar = 0; bar < 3; bar++) {
+      addChord(
+        events,
+        s(i) + bar * BAR,
+        1.7,
+        'highstrings',
+        CHORDS[bar].map((n) => n + 12),
+        gain,
+        0.15
+      );
+    }
+  }
+
+  // 17 起：大提琴低音线。
+  for (let i = 17; i <= 19; i++) {
+    const gain = 0.014 + (i - 17) * 0.002;
+    for (let bar = 0; bar < 3; bar++) {
+      addNote(events, s(i) + bar * BAR, 1.8, 'cello', BASS[bar], gain, -0.1);
+    }
+  }
+
+  // 18 起：定音鼓，每小节一记。
+  for (let i = 18; i <= 19; i++) {
+    const gain = 0.03 + (i - 18) * 0.012;
+    for (let bar = 0; bar < 3; bar++) {
+      addPerc(events, s(i) + bar * BAR, 'timpani', gain, 0);
+    }
+  }
+
+  // 19：唱诗班进来，全体合奏到顶。
+  for (let bar = 0; bar < 3; bar++) {
+    addChord(
+      events,
+      s(19) + bar * BAR,
+      1.7,
+      'choir',
+      [CHORDS[bar][0] + 12, CHORDS[bar][2] + 12],
+      0.028,
+      0
+    );
+  }
 }
 
 function buildOutro(events) {
@@ -527,6 +609,7 @@ export function buildScore() {
   buildSfx(events);
   buildAtmosphere(events);
   buildClimax(events);
+  buildLayers(events);
   buildOutro(events);
   events.sort((a, b) => a.t - b.t || a.inst.localeCompare(b.inst));
   return { duration: TOTAL_DURATION, events };

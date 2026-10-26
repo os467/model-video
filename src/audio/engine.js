@@ -193,6 +193,14 @@ class Synth {
       this.gearroll(event, when, bus);
     } else if (inst === 'conveyor') {
       this.conveyor(event, when, bus);
+    } else if (inst === 'brass') {
+      this.brass(event, when, bus);
+    } else if (inst === 'cello') {
+      this.cello(event, when, bus);
+    } else if (inst === 'highstrings') {
+      this.highstrings(event, when, bus);
+    } else if (inst === 'choir') {
+      this.choir(event, when, bus);
     } else {
       this.lead(event, when, bus);
     }
@@ -640,6 +648,26 @@ class Synth {
         this.noiseBurst(bus, when, 0.035, gain, 'highpass', 3200, 0.6, 0.001);
         this.sineAt(bus, when, 980, 0.04, gain * 0.5, 'sine', 2000);
         break;
+      case 'timpani': {
+        const ctx = this.ctx;
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(88, when);
+        osc.frequency.exponentialRampToValueAtTime(44, when + 0.32);
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 320;
+        const envGain = ctx.createGain();
+        env(envGain.gain, when, 0.005, 0.28, 0.32, gain);
+        osc.connect(filter);
+        filter.connect(envGain);
+        envGain.connect(bus);
+        this.track(osc);
+        osc.start(when);
+        osc.stop(when + 0.7);
+        this.noiseBurst(bus, when, 0.12, gain * 0.35, 'lowpass', 240, 0.6, 0.003);
+        break;
+      }
       default:
         this.noiseBurst(bus, when, 0.05, gain, 'bandpass', 1500, 0.8, 0.002);
     }
@@ -968,6 +996,116 @@ class Synth {
       this.track(osc);
       osc.start(when);
       osc.stop(when + dur + 0.25);
+    }
+  }
+
+  brass(event, when, bus) {
+    const ctx = this.ctx;
+    const notes = event.midis || [event.midi];
+    const dur = event.dur;
+    for (const note of notes) {
+      for (const detune of [-4, 4]) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = cleanFreq(mtof(note));
+        osc.detune.value = detune;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.Q.value = 1.1;
+        filter.frequency.setValueAtTime(650, when);
+        filter.frequency.exponentialRampToValueAtTime(2300, when + 0.12);
+        filter.frequency.exponentialRampToValueAtTime(900, when + dur + 0.1);
+        const envGain = ctx.createGain();
+        env(envGain.gain, when, 0.04, dur, 0.32, event.gain * 0.3);
+        osc.connect(filter);
+        filter.connect(envGain);
+        envGain.connect(bus);
+        this.track(osc);
+        osc.start(when);
+        osc.stop(when + dur + 0.38);
+      }
+    }
+  }
+
+  cello(event, when, bus) {
+    const ctx = this.ctx;
+    const midi = event.midi;
+    for (const detune of [-3, 3]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = cleanFreq(mtof(midi));
+      osc.detune.value = detune;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 820;
+      filter.Q.value = 0.9;
+      const envGain = ctx.createGain();
+      env(envGain.gain, when, 0.14, event.dur, 0.45, event.gain * 0.5);
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      lfo.frequency.value = 4.7;
+      lfoGain.gain.value = 2.2;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+      osc.connect(filter);
+      filter.connect(envGain);
+      envGain.connect(bus);
+      for (const node of [osc, lfo]) {
+        this.track(node);
+        node.start(when);
+        node.stop(when + event.dur + 0.5);
+      }
+    }
+  }
+
+  highstrings(event, when, bus) {
+    const ctx = this.ctx;
+    const notes = event.midis || [event.midi];
+    for (const note of notes) {
+      for (const detune of [-5, 5]) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = cleanFreq(mtof(note));
+        osc.detune.value = detune;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 3200;
+        const envGain = ctx.createGain();
+        env(envGain.gain, when, 0.38, event.dur, 0.75, event.gain * 0.34);
+        osc.connect(filter);
+        filter.connect(envGain);
+        envGain.connect(bus);
+        this.track(osc);
+        osc.start(when);
+        osc.stop(when + event.dur + 0.8);
+      }
+    }
+  }
+
+  choir(event, when, bus) {
+    const ctx = this.ctx;
+    const notes = event.midis || [event.midi];
+    for (const note of notes) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = cleanFreq(mtof(note));
+      const envGain = ctx.createGain();
+      env(envGain.gain, when, 0.5, event.dur, 0.9, event.gain * 0.36);
+      for (const [freq, q, amp] of [[720, 4.5, 0.5], [1240, 5.5, 0.28]]) {
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = freq;
+        bp.Q.value = q;
+        const fg = ctx.createGain();
+        fg.gain.value = amp;
+        osc.connect(bp);
+        bp.connect(fg);
+        fg.connect(envGain);
+      }
+      envGain.connect(bus);
+      this.track(osc);
+      osc.start(when);
+      osc.stop(when + event.dur + 0.95);
     }
   }
 }
