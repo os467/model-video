@@ -9,6 +9,7 @@
     "shot": "node tools/shot.mjs",
     "check": "node tools/check.mjs",
     "check:preview": "node tools/check-preview.mjs",
+    "cover": "node tools/cover.mjs",
     "render:audio": "node tools/render-audio.mjs",
     "render:audio:sample": "node tools/render-audio.mjs --start 109 --duration 10 --out out/audio/sample_10s.wav",
     "render:sample": "node tools/render-frames.mjs --start 0 --end 30 --fps 30 --out out/frames/sample",
